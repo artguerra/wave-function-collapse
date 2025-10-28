@@ -1,3 +1,4 @@
+// asserts a condition (with proper typing)
 export function assert(
   condition: boolean,
   msg?: string | (() => string),
@@ -5,8 +6,3 @@ export function assert(
   if (!condition)
     throw new Error(msg && (typeof msg === "string" ? msg : msg()));
 }
-
-export function idx(y: number, x: number, cols: number) : number {
-  return cols * y + x; 
-}
-

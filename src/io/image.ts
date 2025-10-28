@@ -1,5 +1,5 @@
-import { PixelBlock } from "./wfc";
-import { idx } from "./utils/util";
+import { idx } from "@/utils/grid";
+import { PixelBlock } from "@/core/pixels";
 
 const N_CHANNELS = 4;
 
@@ -115,3 +115,4 @@ export function previewPixelBlocks(
 
   target.appendChild(canvas);
 }
+

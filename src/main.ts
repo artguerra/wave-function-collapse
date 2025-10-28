@@ -1,4 +1,9 @@
-// import { assert } from "./utils/util";
+// import { assert } from "@/utils";
+import { extractPixelBlocks, previewPixelBlocks } from "@/io/image";
+import { generateTileset } from "@/core/tileset";
+import { Wave } from "@/wfc";
+
+import flowers from "@assets/flowers.png";
 
 (async () => {
   if (!navigator.gpu) {
@@ -19,6 +24,12 @@
     return;
   }
 
+  const { blocks, cols } = await extractPixelBlocks(flowers, 3);
+  const tileset = generateTileset(blocks, cols);
+  const wave = new Wave(200, 200, tileset);
+  wave.collapse();
+
+  previewPixelBlocks(document.querySelector("body")!, blocks, cols);
 
   // const device = await adapter.requestDevice();
   // const canvas = document.querySelector<HTMLCanvasElement>("canvas");
