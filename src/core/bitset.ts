@@ -1,10 +1,14 @@
+import { assert } from "@/utils";
+
 export class Bitset {
   readonly data: Uint32Array;
   readonly words: number;
 
-  constructor(words: number, data?: Uint32Array) {
-    this.words = words;
-    this.data = data ?? new Uint32Array(words);
+  constructor(size: number, data?: Uint32Array) {
+    assert(size > 0, "Cannot create a bitset of size 0");
+
+    this.words = Math.ceil(size / 32);
+    this.data = data ?? new Uint32Array(this.words);
   }
 
   setBit(n: number): void {

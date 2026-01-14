@@ -1,7 +1,8 @@
-// import { assert } from "@/utils";
+import { assert } from "@/utils";
 import { extractPixelBlocks, previewPixelBlocks } from "@/io/image";
-import { generateTileset } from "@/core/tileset";
-import { Wave } from "@/wfc";
+import { createTileset } from "@/core/tileset";
+import { Wave } from "@/core/solver/wave";
+import { render } from "@/renderer";
 
 import flowers from "@assets/flowers.png";
 
@@ -25,19 +26,26 @@ import flowers from "@assets/flowers.png";
   }
 
   const { blocks, cols } = await extractPixelBlocks(flowers, 3);
-  const tileset = generateTileset(blocks, cols);
-  const wave = new Wave(200, 200, tileset);
+  const tileset = createTileset(blocks, cols);
+  const wave = new Wave(1024, 1024, tileset);
   wave.collapse();
 
   previewPixelBlocks(document.querySelector("body")!, blocks, cols);
+  // previewPixelBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels), cols);
 
-  // const device = await adapter.requestDevice();
-  // const canvas = document.querySelector<HTMLCanvasElement>("canvas");
-  // assert(canvas !== null);
-  //
-  // const context = canvas.getContext("webgpu") as GPUCanvasContext;
-  // // renderTriangle(context, device);
-  //
+  const device = await adapter.requestDevice();
+  const canvas = document.querySelector<HTMLCanvasElement>("canvas");
+  assert(canvas !== null);
+
+  const context = canvas.getContext("webgpu") as GPUCanvasContext;
+  const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+  context.configure({
+    device,
+    format: presentationFormat,
+  });
+
+  render(context, device, presentationFormat);
+
   // const observer = new ResizeObserver(() => {
   //   canvas.width = canvas.clientWidth;
   //   canvas.height = canvas.clientHeight;

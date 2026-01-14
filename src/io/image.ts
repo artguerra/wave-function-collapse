@@ -5,31 +5,41 @@ const N_CHANNELS = 4;
 
 export async function extractPixelBlocks(
   path: string,
-  size: number,
+  ksize: number,
 ): Promise<{ blocks: PixelBlock[]; cols: number }> {
+  if (ksize % 2 == 0) throw Error("Kernel size must be odd");
+
   const png = await decodePNG(path);
 
-  if (png.width % size != 0 || png.height % size != 0)
+  if (png.width % ksize != 0 || png.height % ksize != 0)
     throw Error("Image not compatible with tile size");
 
-  const outHeight = png.height / size;
-  const outWidth = png.width / size;
+  const pad = (ksize - 1) / 2;
+  const outWidth = png.width - ksize + 1;
 
-  const blocks = new Array<PixelBlock>(outHeight * outWidth);
-  for (let y = 0; y < png.height; ++y) {
-    for (let x = 0; x < png.width; ++x) {
-      const imgIdx = idx(y, x, png.width) * N_CHANNELS;
-      const tileIdx = idx(Math.floor(y / size), Math.floor(x / size), outWidth);
-      const innerTileIdx = idx(y % size, x % size, size);
+  const blocks: PixelBlock[] = [];
 
-      if (!blocks[tileIdx]) blocks[tileIdx] = new PixelBlock(size);
+  for (let y = pad; y < png.height - pad; ++y) {
+    for (let x = pad; x < png.width - pad; ++x) {
 
-      blocks[tileIdx].values[innerTileIdx] = [
-        png.data[imgIdx],
-        png.data[imgIdx + 1],
-        png.data[imgIdx + 2],
-        png.data[imgIdx + 3],
-      ];
+      const block = new PixelBlock(ksize);
+      for (let innerY = y - pad; innerY <= y + pad; ++innerY) {
+        for (let innerX = x - pad; innerX <= x + pad; ++innerX) {
+          const blockIdx = idx(innerY + pad - y, innerX + pad - x, ksize);
+
+          const imgIdx = idx(innerY, innerX, png.width) * N_CHANNELS;
+
+          // only RGBA values for now
+          block.values[blockIdx] = [
+            png.data[imgIdx],
+            png.data[imgIdx + 1],
+            png.data[imgIdx + 2],
+            png.data[imgIdx + 3],
+          ];
+        }
+      }
+
+      blocks.push(block);
     }
   }
 
@@ -62,7 +72,7 @@ async function decodePNG(url: string): Promise<PngResponse> {
 export function previewPixelBlocks(
   target: HTMLElement,
   blocks: PixelBlock[],
-  cols: number,
+  cols: number = 16,
   scale = 16,
   gap = 2,
 ) {
@@ -115,4 +125,3 @@ export function previewPixelBlocks(
 
   target.appendChild(canvas);
 }
-

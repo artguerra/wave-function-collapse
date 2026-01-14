@@ -4,15 +4,16 @@ import { PixelBlock } from "@/core/pixels";
 import type { Tile } from "@/core/types";
 
 export class Tileset {
-  tiles: Tile[];
-  allowedNeighbors: [
+  readonly size: number;
+  readonly tiles: Tile[];
+  readonly allowedNeighbors: [
     Bitset[], // N
     Bitset[], // E
     Bitset[], // S
     Bitset[], // W
   ];
-  weights: Float32Array;
-  weightLogWeights: Float32Array;
+  readonly weights: Float32Array;
+  readonly weightLogWeights: Float32Array;
 
   constructor(
     tiles: Tile[],
@@ -20,6 +21,7 @@ export class Tileset {
     allowed: [Bitset[], Bitset[], Bitset[], Bitset[]],
   ) {
     this.tiles = tiles;
+    this.size = tiles.length;
     this.allowedNeighbors = allowed;
     this.weights = new Float32Array(weights);
     this.weightLogWeights = new Float32Array(
@@ -28,16 +30,14 @@ export class Tileset {
   }
 }
 
-export function generateTileset(rawTiles: PixelBlock[], cols: number): Tileset {
+// `cols` is needed to gather adjecency information
+export function createTileset(rawTiles: PixelBlock[], cols: number): Tileset {
   const tiles: Tile[] = [];
   const frequencies: number[] = [];
   const rows = rawTiles.length / cols;
 
   const tileIndexMap = new Map<string, Tile["id"]>();
-  const neighbors = new Map<
-    string,
-    [Set<string>, Set<string>, Set<string>, Set<string>]
-  >();
+  const neighbors = new Map<string, [Set<string>, Set<string>, Set<string>, Set<string>]>();
 
   for (let y = 0; y < rows; ++y) {
     for (let x = 0; x < cols; ++x) {
@@ -66,28 +66,23 @@ export function generateTileset(rawTiles: PixelBlock[], cols: number): Tileset {
   }
 
   const nTiles = tiles.length;
-  const words = Math.ceil(nTiles / 32);
-  const adj: Tileset["allowedNeighbors"] = [
-    Array.from({ length: nTiles }, () => new Bitset(words)),
-    Array.from({ length: nTiles }, () => new Bitset(words)),
-    Array.from({ length: nTiles }, () => new Bitset(words)),
-    Array.from({ length: nTiles }, () => new Bitset(words)),
+  const allAdjecencies: Tileset["allowedNeighbors"] = [
+    Array.from({ length: nTiles }, () => new Bitset(nTiles)),
+    Array.from({ length: nTiles }, () => new Bitset(nTiles)),
+    Array.from({ length: nTiles }, () => new Bitset(nTiles)),
+    Array.from({ length: nTiles }, () => new Bitset(nTiles)),
   ];
 
-  neighbors.forEach(
-    (
-      dirs: [Set<string>, Set<string>, Set<string>, Set<string>],
-      key: string,
-    ) => {
-      const id = tileIndexMap.get(key)!;
+  neighbors.forEach((dirs, key) => {
+    const id = tileIndexMap.get(key)!;
 
-      for (let d = 0; d < 4; ++d) {
-        for (const neighHash of dirs[d]) {
-          adj[d][id].setBit(tileIndexMap.get(neighHash)!);
-        }
+    for (let d = 0; d < 4; ++d) {
+      for (const neighHash of dirs[d]) {
+        allAdjecencies[d][id].setBit(tileIndexMap.get(neighHash)!);
       }
-    },
+    }
+  },
   );
 
-  return new Tileset(tiles, frequencies, adj);
+  return new Tileset(tiles, frequencies, allAdjecencies);
 }
