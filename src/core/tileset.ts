@@ -5,6 +5,7 @@ import type { Tile } from "@/core/types";
 
 export class Tileset {
   readonly size: number;
+  readonly tileSize: number;
   readonly tiles: Tile[];
   readonly allowedNeighbors: [
     Bitset[], // N
@@ -12,26 +13,24 @@ export class Tileset {
     Bitset[], // S
     Bitset[], // W
   ];
-  readonly weights: Float32Array;
-  readonly weightLogWeights: Float32Array;
+  readonly frequencies: Float32Array;
 
   constructor(
+    tileSize: number,
     tiles: Tile[],
     weights: number[],
     allowed: [Bitset[], Bitset[], Bitset[], Bitset[]],
   ) {
+    this.tileSize = tileSize;
     this.tiles = tiles;
     this.size = tiles.length;
     this.allowedNeighbors = allowed;
-    this.weights = new Float32Array(weights);
-    this.weightLogWeights = new Float32Array(
-      weights.map((w) => w * Math.log(w)),
-    );
+    this.frequencies = new Float32Array(weights);
   }
 }
 
 // `cols` is needed to gather adjecency information
-export function createTileset(rawTiles: PixelBlock[], cols: number): Tileset {
+export function createTileset(tileSize: number, rawTiles: PixelBlock[], cols: number): Tileset {
   const tiles: Tile[] = [];
   const frequencies: number[] = [];
   const rows = rawTiles.length / cols;
@@ -84,5 +83,13 @@ export function createTileset(rawTiles: PixelBlock[], cols: number): Tileset {
   },
   );
 
-  return new Tileset(tiles, frequencies, allAdjecencies);
+  // normalize frequencies
+  let totalFrequency = 0;
+  for (let i = 0; i < frequencies.length; ++i) {
+    totalFrequency += frequencies[i];
+  }
+
+  const normalizedFrequencies = frequencies.map(f => f / totalFrequency);
+
+  return new Tileset(tileSize, tiles, normalizedFrequencies, allAdjecencies);
 }

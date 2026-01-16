@@ -3,8 +3,10 @@ import type { RGBA, PixelData } from "@/core/types";
 export class PixelBlock implements PixelData {
   private _hash?: string;
   values: RGBA[];
+  ksize: number;
 
   constructor(size: number) {
+    this.ksize = size;
     this.values = new Array<RGBA>(size * size);
   }
 

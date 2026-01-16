@@ -2,12 +2,34 @@ import { assert } from "@/utils";
 import { extractPixelBlocks, previewPixelBlocks } from "@/io/image";
 import { createTileset } from "@/core/tileset";
 import { Wave } from "@/core/solver/wave";
-import { render } from "@/renderer";
+import { type GPUAppBase, initWebGPU, initRenderPipeline, render, initGPUBuffers, updateCellData } from "@/renderer";
 
 import flowers from "@assets/flowers.png";
 
+const TILE_SIZE = 3;
+const GRID_WIDTH = 64;
+const GRID_HEIGHT = 64;
+const CANVAS_WIDTH = 192;
+const CANVAS_HEIGHT = 192;
+
 (async () => {
-  if (!navigator.gpu) {
+  // WEBGPU initalization
+  const canvas = document.querySelector<HTMLCanvasElement>("canvas");
+  assert(canvas !== null);
+  let gpuAppBase: GPUAppBase;
+
+  try {
+    gpuAppBase = await initWebGPU(canvas, {
+      canvas: {
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+      },
+      grid: {
+        width: GRID_WIDTH,
+        height: GRID_HEIGHT,
+      }
+    });
+  } catch(e) {
     const t = document.querySelector("#title") as HTMLElement;
     t.innerHTML = "WebGPU is not supported on this browser.";
     t.style.display = "block";
@@ -15,36 +37,25 @@ import flowers from "@assets/flowers.png";
     return;
   }
 
-  const adapter = await navigator.gpu.requestAdapter();
+  // WFC setup
+  const { blocks, cols } = await extractPixelBlocks(flowers, TILE_SIZE);
+  const tileset = createTileset(TILE_SIZE, blocks, cols);
 
-  if (!adapter) {
-    const t = document.querySelector("#title") as HTMLElement;
-    t.innerHTML = "No adapter available for WebGPU";
-    t.style.display = "block";
+  const wave = new Wave(GRID_WIDTH, GRID_HEIGHT, tileset);
 
-    return;
-  }
+  const gpuAppPipeline = initRenderPipeline(gpuAppBase);
+  const gpuApp = initGPUBuffers(gpuAppPipeline);
 
-  const { blocks, cols } = await extractPixelBlocks(flowers, 3);
-  const tileset = createTileset(blocks, cols);
-  const wave = new Wave(1024, 1024, tileset);
-  wave.collapse();
+  setInterval(() => {
+    updateCellData(gpuApp, new Array(GRID_HEIGHT * GRID_WIDTH * 3).fill(Math.random()));
+    render(gpuApp);
+  }, 16.6);
+
+  // wave.collapse();
 
   previewPixelBlocks(document.querySelector("body")!, blocks, cols);
   // previewPixelBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels), cols);
 
-  const device = await adapter.requestDevice();
-  const canvas = document.querySelector<HTMLCanvasElement>("canvas");
-  assert(canvas !== null);
-
-  const context = canvas.getContext("webgpu") as GPUCanvasContext;
-  const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-  context.configure({
-    device,
-    format: presentationFormat,
-  });
-
-  render(context, device, presentationFormat);
 
   // const observer = new ResizeObserver(() => {
   //   canvas.width = canvas.clientWidth;
