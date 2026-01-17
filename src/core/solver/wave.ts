@@ -34,7 +34,9 @@ export class Wave {
         this.wave[i++] = new Cell({ x, y }, tileset);
   }
 
-  collapse(): void {
+  collapse(
+    onIterationFinish: (wave: Cell[]) => void
+  ): void {
     console.log("collapse started")
     while (this.nCollapsed != this.waveSize) {
       const cell = this.chooseNextCell();
@@ -45,6 +47,8 @@ export class Wave {
       this.observe(cell);
 
       // this.propagate(cell);
+
+      onIterationFinish(this.wave);
     }
     console.log("collapse ended")
   }

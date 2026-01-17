@@ -2,12 +2,43 @@ import type { RGBA, PixelData } from "@/core/types";
 
 export class PixelBlock implements PixelData {
   private _hash?: string;
+  private _averageColor: RGBA;
+  private _averageCalculated: boolean;
   values: RGBA[];
   ksize: number;
 
-  constructor(size: number) {
-    this.ksize = size;
-    this.values = new Array<RGBA>(size * size);
+  constructor(ksize: number) {
+    this.ksize = ksize;
+    this.values = new Array<RGBA>(ksize * ksize);
+
+    this._averageColor = [0, 0, 0, 0];
+    this._averageCalculated = false;
+  }
+
+  setAll(color: RGBA): void {
+    this.values = new Array(this.ksize * this.ksize).fill(color);
+    this.calculateAverage();
+  }
+
+  get averageColor(): RGBA {
+    if (this._averageCalculated) return this._averageColor;
+    return this.calculateAverage();
+  }
+
+  calculateAverage(): RGBA {
+    const channels = this._averageColor.length;
+    const sums = new Array(channels).fill(0);
+
+    for (const pixel of this.values) {
+      for (let i = 0; i < channels; ++i) {
+        sums[i] += pixel[i];
+      }
+    }
+
+    this._averageColor = sums.map(s => s / (this.ksize * this.ksize)) as RGBA;
+    this._averageCalculated = true;
+
+    return this._averageColor;
   }
 
   get hash() {

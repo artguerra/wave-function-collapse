@@ -7,7 +7,7 @@ struct ConfigUniforms {
 var<uniform> config: ConfigUniforms;
 
 @group(0) @binding(1)
-var<storage, read> cell_colors: array<vec3f>;
+var<storage, read> cell_colors: array<vec4f>;
 
 // simple vertex shader to display a full-screen quad
 @vertex
@@ -33,5 +33,5 @@ fn fs(@builtin(position) frag_pos: vec4f) -> @location(0) vec4f {
 
   let grid_idx = grid_y * config.grid_size.x + grid_x;
 
-  return vec4f(cell_colors[grid_idx], 1.0);
+  return vec4f(cell_colors[grid_idx].xyz, 1.0);
 }

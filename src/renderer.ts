@@ -111,7 +111,7 @@ export function initGPUBuffers(app: GPUAppPipeline): GPUApp {
   const cellDataBuffer = app.device.createBuffer({
     label: "cell data storage uniform buffer",
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    size: (app.dimensions.grid.width * app.dimensions.grid.height) * 3 * 4,
+    size: (app.dimensions.grid.width * app.dimensions.grid.height) * 4 * 4,
   });
 
 

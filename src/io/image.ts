@@ -36,9 +36,11 @@ export async function extractPixelBlocks(
             png.data[imgIdx + 2],
             png.data[imgIdx + 3],
           ];
+
         }
       }
 
+      block.calculateAverage();
       blocks.push(block);
     }
   }

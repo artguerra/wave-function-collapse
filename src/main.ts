@@ -1,6 +1,7 @@
-import { assert } from "@/utils";
+import { assert, rgbaU8ToF32 } from "@/utils";
 import { extractPixelBlocks, previewPixelBlocks } from "@/io/image";
 import { createTileset } from "@/core/tileset";
+import { Cell } from "@/core/solver/cell";
 import { Wave } from "@/core/solver/wave";
 import { type GPUAppBase, initWebGPU, initRenderPipeline, render, initGPUBuffers, updateCellData } from "@/renderer";
 
@@ -46,14 +47,14 @@ const CANVAS_HEIGHT = 192;
   const gpuAppPipeline = initRenderPipeline(gpuAppBase);
   const gpuApp = initGPUBuffers(gpuAppPipeline);
 
-  setInterval(() => {
-    updateCellData(gpuApp, new Array(GRID_HEIGHT * GRID_WIDTH * 3).fill(Math.random()));
-    render(gpuApp);
-  }, 16.6);
+  wave.collapse((w: Cell[]) => {
+    const colors = w.map(c => rgbaU8ToF32(c.currentColors.averageColor)).flat();
+    updateCellData(gpuApp, colors);
+  });
 
-  // wave.collapse();
+  setInterval(() => render(gpuApp), 16.6);
 
-  previewPixelBlocks(document.querySelector("body")!, blocks, cols);
+  // previewPixelBlocks(document.querySelector("body")!, blocks, cols);
   // previewPixelBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels), cols);
 
 

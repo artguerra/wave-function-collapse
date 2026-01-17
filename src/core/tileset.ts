@@ -1,7 +1,7 @@
 import { idx } from "@/utils/grid";
 import { Bitset } from "@/core/bitset";
 import { PixelBlock } from "@/core/pixels";
-import type { Tile } from "@/core/types";
+import type { RGBA, Tile } from "@/core/types";
 
 export class Tileset {
   readonly size: number;
@@ -14,15 +14,18 @@ export class Tileset {
     Bitset[], // W
   ];
   readonly frequencies: Float32Array;
+  readonly averageColor: RGBA;
 
   constructor(
     tileSize: number,
     tiles: Tile[],
+    averageColor: RGBA,
     weights: number[],
     allowed: [Bitset[], Bitset[], Bitset[], Bitset[]],
   ) {
     this.tileSize = tileSize;
     this.tiles = tiles;
+    this.averageColor = averageColor;
     this.size = tiles.length;
     this.allowedNeighbors = allowed;
     this.frequencies = new Float32Array(weights);
@@ -91,5 +94,13 @@ export function createTileset(tileSize: number, rawTiles: PixelBlock[], cols: nu
 
   const normalizedFrequencies = frequencies.map(f => f / totalFrequency);
 
-  return new Tileset(tileSize, tiles, normalizedFrequencies, allAdjecencies);
+  // calculate average color
+  const channels = 4;
+  const colorSum = new Array(channels).fill(0);
+  for (const tile of tiles) {
+    for (let i = 0; i < channels; ++i) colorSum[i] += tile.pixels.averageColor[i];
+  }
+  const average = colorSum.map(s => s / tiles.length) as RGBA;
+
+  return new Tileset(tileSize, tiles, average, normalizedFrequencies, allAdjecencies);
 }

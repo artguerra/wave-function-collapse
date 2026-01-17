@@ -5,6 +5,7 @@ export function idx(y: number, x: number, cols: number): number {
   return cols * y + x;
 }
 
+// return the {x, y} coords of the corresponding index in a 1D mapped array
 export function coord(idx: number, cols: number): Vec2 {
   return {
     x: idx % cols,

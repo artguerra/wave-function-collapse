@@ -1,6 +1,7 @@
-import type { Vec2 } from "@/core/types";
-import { Bitset } from "../bitset";
-import type { Tileset } from "../tileset";
+import type { PixelData, Vec2 } from "@/core/types";
+import { Bitset } from "@/core/bitset";
+import type { Tileset } from "@/core/tileset";
+import { PixelBlock } from "../pixels";
 
 export class Cell {
   readonly pos: Vec2;
@@ -12,6 +13,8 @@ export class Cell {
   isCollapsed: boolean;
   collapsedState: number | undefined; // final state (if collapsed)
 
+  currentColors: PixelData;
+
   // entropy related values
   sumWeights: number;
   sumWeightLogWeights: number;
@@ -22,6 +25,9 @@ export class Cell {
     this.tileset = tileset;
     this.possibleStates = new Bitset(tileset.size, true);
     this.remainingStates = tileset.size;
+
+    this.currentColors = new PixelBlock(tileset.tileSize);
+    this.currentColors.setAll(tileset.averageColor);
 
     this.sumWeights = 0;
     this.sumWeightLogWeights = 0;
@@ -42,5 +48,11 @@ export class Cell {
 
     this.entropy = 0;
     this.remainingStates = 1;
+
+    // @TODO update current colors
+  }
+
+  apply(): void {
+    // @TODO update current colors
   }
 }
