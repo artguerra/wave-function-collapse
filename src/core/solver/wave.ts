@@ -1,6 +1,6 @@
-import type { Vec2 } from "../types.ts";
+import type { Vec2 } from "@/core/types.ts";
 import { Tileset } from "@/core/tileset";
-import { Cell } from "./cell.ts";
+import { Cell } from "@/core/solver/cell";
 import { idx } from "@/utils/grid.ts";
 
 type Heuristic = "SCANLINE" | "ENTROPY";
@@ -35,7 +35,7 @@ export class Wave {
   }
 
   collapse(
-    onIterationFinish: (wave: Cell[]) => void
+    onIterationFinish: () => void
   ): void {
     console.log("collapse started")
     while (this.nCollapsed != this.waveSize) {
@@ -43,12 +43,12 @@ export class Wave {
 
       if (cell == -1) throw Error("Could not choose next cell to collapse.");
 
-      // @ TODO handle errors and impossible cases
       this.observe(cell);
 
+      // @ TODO handle errors and impossible cases
       // this.propagate(cell);
 
-      onIterationFinish(this.wave);
+      onIterationFinish();
     }
     console.log("collapse ended")
   }
@@ -59,12 +59,15 @@ export class Wave {
         if (!this.wave[i].isCollapsed) return i;
     }
 
+    // @TODO add entropy heuristic
+
     return -1;
   }
 
   observe(cell: number): void {
+    console.log("observing cell " + cell);
     this.wave[cell].collapse();
-    this.nCollapsed++;
+    this.nCollapsed++; // @TODO move to propagate
   }
 
   propagate(initialCell: number): void {
@@ -89,5 +92,24 @@ export class Wave {
       if (pos.y > 0 && !visited[up]) stack.push(up);
       if (pos.y < this.height - 1 && !visited[down]) stack.push(down);
     }
+  }
+
+  getCurrentColorsFlat(): Float32Array {
+    const floatsPerCell = this.tileset.tileSize * this.tileset.tileSize * 4; // rgba
+    const data = new Float32Array(this.waveSize * floatsPerCell);
+    
+    let idx = 0;
+    for (const cell of this.wave) {
+      for (const c of cell.currentColors.values) {
+        const color = cell.isCollapsed ? c : cell.currentColors.averageColor;
+
+        data[idx++] = color[0] / 255;
+        data[idx++] = color[1] / 255;
+        data[idx++] = color[2] / 255;
+        data[idx++] = color[3] / 255;
+      }
+    }
+    
+    return data;
   }
 }

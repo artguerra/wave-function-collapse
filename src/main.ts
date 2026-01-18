@@ -1,17 +1,16 @@
-import { assert, rgbaU8ToF32 } from "@/utils";
+import { assert } from "@/utils";
 import { extractPixelBlocks, previewPixelBlocks } from "@/io/image";
 import { createTileset } from "@/core/tileset";
-import { Cell } from "@/core/solver/cell";
 import { Wave } from "@/core/solver/wave";
 import { type GPUAppBase, initWebGPU, initRenderPipeline, render, initGPUBuffers, updateCellData } from "@/renderer";
 
 import flowers from "@assets/flowers.png";
 
 const TILE_SIZE = 3;
-const GRID_WIDTH = 64;
-const GRID_HEIGHT = 64;
-const CANVAS_WIDTH = 192;
-const CANVAS_HEIGHT = 192;
+const GRID_WIDTH = 16;
+const GRID_HEIGHT = 16;
+const CANVAS_WIDTH = 640;
+const CANVAS_HEIGHT = 640;
 
 (async () => {
   // WEBGPU initalization
@@ -28,7 +27,8 @@ const CANVAS_HEIGHT = 192;
       grid: {
         width: GRID_WIDTH,
         height: GRID_HEIGHT,
-      }
+      },
+      tileSize: TILE_SIZE,
     });
   } catch(e) {
     const t = document.querySelector("#title") as HTMLElement;
@@ -47,9 +47,8 @@ const CANVAS_HEIGHT = 192;
   const gpuAppPipeline = initRenderPipeline(gpuAppBase);
   const gpuApp = initGPUBuffers(gpuAppPipeline);
 
-  wave.collapse((w: Cell[]) => {
-    const colors = w.map(c => rgbaU8ToF32(c.currentColors.averageColor)).flat();
-    updateCellData(gpuApp, colors);
+  wave.collapse(() => {
+    updateCellData(gpuApp, wave.getCurrentColorsFlat());
   });
 
   setInterval(() => render(gpuApp), 16.6);

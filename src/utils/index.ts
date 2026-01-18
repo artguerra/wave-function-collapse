@@ -8,8 +8,3 @@ export function assert(
   if (!condition)
     throw new Error(msg && (typeof msg === "string" ? msg : msg()));
 }
-
-// convert 8 bit unsigned RGBA value (0..255) to float (0..1)
-export function rgbaU8ToF32(color: RGBA) {
-  return color.map(c => c / 255);
-}

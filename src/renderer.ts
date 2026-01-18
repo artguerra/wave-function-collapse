@@ -4,6 +4,7 @@ import type { Dimensions } from "./core/types";
 export interface AppDimensions {
   grid: Dimensions;
   canvas: Dimensions;
+  tileSize: number;
 }
 
 export interface GPUAppBase {
@@ -98,10 +99,12 @@ export function initGPUBuffers(app: GPUAppPipeline): GPUApp {
     app.dimensions.grid.height,
     app.dimensions.canvas.width,
     app.dimensions.canvas.height,
+    app.dimensions.tileSize,
+    0
   ]);
 
   const uniformBuffer = app.device.createBuffer({
-    label: "uniform buffer",
+    label: "config uniform buffer",
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     size: configData.byteLength,
   });
@@ -111,7 +114,9 @@ export function initGPUBuffers(app: GPUAppPipeline): GPUApp {
   const cellDataBuffer = app.device.createBuffer({
     label: "cell data storage uniform buffer",
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    size: (app.dimensions.grid.width * app.dimensions.grid.height) * 4 * 4,
+    size: (app.dimensions.grid.width * app.dimensions.grid.height) // for each tile (x, y)
+      * (app.dimensions.tileSize * app.dimensions.tileSize) // pixels for each tile
+      * 4 * 4, // RGBA and 4 bytes each
   });
 
 

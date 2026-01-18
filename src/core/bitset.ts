@@ -1,6 +1,6 @@
 import { assert } from "@/utils";
 
-export class Bitset {
+export class Bitset implements Iterable<[number, boolean]> {
   readonly size: number;
   readonly data: Uint32Array;
   readonly words: number;
@@ -35,7 +35,18 @@ export class Bitset {
     this.data[n >>> 5] |= 1 << (n & 31);
   }
 
+  unsetBit(n: number): void {
+    this.data[n >>> 5] &= ~(1 << (n & 31));
+  }
+
   getBit(n: number): boolean {
     return (this.data[n >>> 5] & (1 << (n & 31))) !== 0;
   }
+
+  *[Symbol.iterator](): IterableIterator<[number, boolean]> {
+    for (let i = 0; i < this.size; ++i) {
+      yield [i, this.getBit(i)];
+    }
+  }
+
 }
