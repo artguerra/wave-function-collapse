@@ -1,4 +1,4 @@
-import type { Vec2 } from "@/core/types.ts";
+import { DX, DY, OPPOSITE, type Vec2 } from "@/core/types.ts";
 import { Tileset } from "@/core/tileset";
 import { Cell } from "@/core/solver/cell";
 import { idx } from "@/utils/grid.ts";
@@ -15,6 +15,11 @@ export class Wave {
 
   waveSize: number;
   wave: Cell[]; // each actual cell with its possible states management
+
+  // propagation data structures
+  propagationStack: [cell: number, tile: number][];
+  supporters: number[][][]; // how many supporters a specific tile in a specific cell has in each direction
+
   nCollapsed: number;
 
   constructor(width: number, height: number, tileset: Tileset, heuristic: Heuristic = "SCANLINE") {
@@ -24,33 +29,53 @@ export class Wave {
     this.height = height;
     this.waveSize = width * height;
 
+    this.propagationStack = [];
+    this.supporters = Array.from({ length: this.waveSize }, () =>
+      Array.from({ length: tileset.size }, () => new Array(4))
+    );
+
     this.tileset = tileset;
-    this.nCollapsed = 0;
     this.wave = new Array<Cell>(this.waveSize);
+    this.nCollapsed = 0;
 
     let i = 0;
     for (let y = 0; y < height; ++y)
       for (let x = 0; x < width; ++x)
         this.wave[i++] = new Cell({ x, y }, tileset);
+
+    // initialize supporters array
+    for (let cell = 0; cell < this.waveSize; ++cell) {
+      for (let tile = 0; tile < this.tileset.size; ++tile) {
+        for (let dir = 0; dir < 4; ++dir) {
+          this.supporters[cell][tile][dir] = this.tileset.allowedNeighbors[dir][tile].count();
+        }
+      }
+    }
   }
 
-  collapse(
-    onIterationFinish: () => void
-  ): void {
-    console.log("collapse started")
+  async collapse(
+    onPropagate: () => Promise<void>
+  ): Promise<void> {
     while (this.nCollapsed != this.waveSize) {
       const cell = this.chooseNextCell();
 
       if (cell == -1) throw Error("Could not choose next cell to collapse.");
 
-      this.observe(cell);
+      let success = this.observe(cell);
+      if (!success) {
+        console.log("WFC reached and impossible state.");
+        return;
+      }
 
       // @ TODO handle errors and impossible cases
-      // this.propagate(cell);
+      success = this.propagate();
+      if (!success) {
+        console.log("WFC reached and impossible state.");
+        return;
+      }
 
-      onIterationFinish();
+      await onPropagate();
     }
-    console.log("collapse ended")
   }
 
   chooseNextCell(): number {
@@ -64,52 +89,66 @@ export class Wave {
     return -1;
   }
 
-  observe(cell: number): void {
-    console.log("observing cell " + cell);
-    this.wave[cell].collapse();
-    this.nCollapsed++; // @TODO move to propagate
+  observe(cell: number): boolean {
+    const res = this.wave[cell].collapse((tile) => {this.ban(cell, tile)});
+
+    if (res) this.nCollapsed++;
+
+    return res;
   }
 
-  propagate(initialCell: number): void {
-    const stack = [initialCell];
-    const visited = new Array(this.waveSize).fill(false);
+  propagate(): boolean {
+    while (this.propagationStack.length > 0) {
+      const [cell, tile] = this.propagationStack.pop()!;
 
-    while (stack.length > 0) {
-      const cell = stack.pop()!;
 
-      if (visited[cell]) continue;
-
-      visited[cell] = true;
       const pos: Vec2 = this.wave[cell].pos;
 
-      const left = idx(pos.y, pos.x - 1, this.width);
-      const right = idx(pos.y, pos.x + 1, this.width);
-      const up = idx(pos.y - 1, pos.x, this.width);
-      const down = idx(pos.y + 1, pos.x, this.width);
+      for (let d = 0; d < 4; ++d) {
+        const nx = pos.x + DX[d];
+        const ny = pos.y + DY[d];
 
-      if (pos.x > 0 && !visited[left]) stack.push(left);
-      if (pos.x < this.width - 1 && !visited[right]) stack.push(right);
-      if (pos.y > 0 && !visited[up]) stack.push(up);
-      if (pos.y < this.height - 1 && !visited[down]) stack.push(down);
+        if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
+
+        const neighCell = idx(ny, nx, this.width);
+
+        // for each possible neighbor of this tile, update support
+        for (const neighTile of this.tileset.allowedNeighbors[d][tile]) {
+          const sup = this.supporters[neighCell][neighTile];
+
+          if (!this.wave[neighCell].possibleStates.getBit(neighTile)) continue;
+
+          sup[OPPOSITE[d]]--;
+          if (sup[OPPOSITE[d]] == 0) this.ban(neighCell, neighTile);
+        }
+      }
+    }
+
+    return true;
+  }
+
+  ban(cell: number, tile: number) {
+    const changed = this.wave[cell].ban(tile);
+
+    if (changed) {
+      this.propagationStack.push([cell, tile]);
+      for (let d = 0; d < 4; ++d) this.supporters[cell][tile][d] = 0;
     }
   }
 
   getCurrentColorsFlat(): Float32Array {
-    const floatsPerCell = this.tileset.tileSize * this.tileset.tileSize * 4; // rgba
-    const data = new Float32Array(this.waveSize * floatsPerCell);
-    
+    const data = new Float32Array(this.waveSize * 4);
+
     let idx = 0;
     for (const cell of this.wave) {
-      for (const c of cell.currentColors.values) {
-        const color = cell.isCollapsed ? c : cell.currentColors.averageColor;
+      const color = cell.currentColor;
 
-        data[idx++] = color[0] / 255;
-        data[idx++] = color[1] / 255;
-        data[idx++] = color[2] / 255;
-        data[idx++] = color[3] / 255;
-      }
+      data[idx++] = color[0] / 255;
+      data[idx++] = color[1] / 255;
+      data[idx++] = color[2] / 255;
+      data[idx++] = color[3] / 255;
     }
-    
+
     return data;
   }
 }

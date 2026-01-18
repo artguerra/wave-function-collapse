@@ -1,17 +1,17 @@
 import { idx } from "@/utils/grid";
 import { Bitset } from "@/core/bitset";
 import { PixelBlock } from "@/core/pixels";
-import type { RGBA, Tile } from "@/core/types";
+import { OPPOSITE, type RGBA, type Tile } from "@/core/types";
 
 export class Tileset {
   readonly size: number;
   readonly tileSize: number;
   readonly tiles: Tile[];
   readonly allowedNeighbors: [
+    Bitset[], // W
     Bitset[], // N
     Bitset[], // E
     Bitset[], // S
-    Bitset[], // W
   ];
   readonly frequencies: Float32Array;
   readonly averageColor: RGBA;
@@ -39,52 +39,50 @@ export function createTileset(tileSize: number, rawTiles: PixelBlock[], cols: nu
   const rows = rawTiles.length / cols;
 
   const tileIndexMap = new Map<string, Tile["id"]>();
-  const neighbors = new Map<string, [Set<string>, Set<string>, Set<string>, Set<string>]>();
 
   for (let y = 0; y < rows; ++y) {
     for (let x = 0; x < cols; ++x) {
-      // 1) create new tile in the tileset (if necessary)
+      // create new tile in the tileset (if necessary)
       const tileIdx = idx(y, x, cols);
-      const hash = rawTiles[tileIdx].hash;
+      const pixels = rawTiles[tileIdx];
+      const hash = pixels.hash;
 
       if (!tileIndexMap.has(hash)) {
         const id = tiles.length;
-        tiles.push({ id, pixels: rawTiles[tileIdx] });
-        frequencies.push(1);
+        tiles.push({ id, pixels });
 
+        frequencies.push(1);
         tileIndexMap.set(hash, id);
-        neighbors.set(hash, [new Set(), new Set(), new Set(), new Set()]);
       } else {
         frequencies[tileIndexMap.get(hash)!] += 1;
       }
-
-      // 2) add neighbors
-      const curNeighbors = neighbors.get(hash)!;
-      if (y > 0) curNeighbors[0].add(rawTiles[idx(y - 1, x, cols)].hash); // N
-      if (x < cols - 1) curNeighbors[1].add(rawTiles[idx(y, x + 1, cols)].hash); // E
-      if (y < rows - 1) curNeighbors[2].add(rawTiles[idx(y + 1, x, cols)].hash); // S
-      if (x > 0) curNeighbors[3].add(rawTiles[idx(y, x - 1, cols)].hash); // W
     }
   }
 
   const nTiles = tiles.length;
-  const allAdjecencies: Tileset["allowedNeighbors"] = [
-    Array.from({ length: nTiles }, () => new Bitset(nTiles)),
-    Array.from({ length: nTiles }, () => new Bitset(nTiles)),
-    Array.from({ length: nTiles }, () => new Bitset(nTiles)),
-    Array.from({ length: nTiles }, () => new Bitset(nTiles)),
+  const allowed: Tileset["allowedNeighbors"] = [
+    Array.from({ length: nTiles }, () => new Bitset(nTiles)), // W
+    Array.from({ length: nTiles }, () => new Bitset(nTiles)), // N
+    Array.from({ length: nTiles }, () => new Bitset(nTiles)), // E
+    Array.from({ length: nTiles }, () => new Bitset(nTiles)), // S
   ];
+  
+  for (const tileIdx of tileIndexMap.values()) {
+    const tile = tiles[tileIdx];
 
-  neighbors.forEach((dirs, key) => {
-    const id = tileIndexMap.get(key)!;
+    for (const neighIdx of tileIndexMap.values()) {
+      const neighbor = tiles[neighIdx];
 
-    for (let d = 0; d < 4; ++d) {
-      for (const neighHash of dirs[d]) {
-        allAdjecencies[d][id].setBit(tileIndexMap.get(neighHash)!);
+      for (let d = 0; d < 4; ++d) {
+        if (allowed[d][tileIdx].getBit(neighIdx)) continue; // already computed
+
+        if (compatible(tile, neighbor, d)) {
+          allowed[d][tileIdx].setBit(neighIdx);
+          allowed[OPPOSITE[d]][neighIdx].setBit(tileIdx);
+        }
       }
-    }
-  },
-  );
+    };
+  };
 
   // normalize frequencies
   let totalFrequency = 0;
@@ -102,5 +100,46 @@ export function createTileset(tileSize: number, rawTiles: PixelBlock[], cols: nu
   }
   const average = colorSum.map(s => s / tiles.length) as RGBA;
 
-  return new Tileset(tileSize, tiles, average, normalizedFrequencies, allAdjecencies);
+  return new Tileset(tileSize, tiles, average, normalizedFrequencies, allowed);
+}
+
+function compatible(tile: Tile, neighbor: Tile, dir: number): boolean {
+  const ksize = tile.pixels.ksize;
+
+  let startX = 0, endX = ksize, startY = 0, endY = ksize;
+  let shiftX = 0, shiftY = 0;
+
+  switch (dir) {
+    case 0: // W
+      endX = ksize - 1; 
+      shiftX = 1;      
+      break;
+    case 2: // E
+      startX = 1;
+      shiftX = -1;
+      break;
+    case 1: // N
+      endY = ksize - 1;
+      shiftY = 1;
+      break;
+    case 3: // S
+      startY = 1;
+      shiftY = -1;
+      break;
+  }
+
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      const idxT = idx(y, x, ksize); // pixel idx for the tile
+      const idxN = idx(y + shiftY, x + shiftX, ksize); // pixel idx for neighbor
+
+      if (!rgbaEqual(tile.pixels.values[idxT], neighbor.pixels.values[idxN])) return false;
+    }
+  }
+
+  return true;
+}
+
+function rgbaEqual(a: RGBA, b: RGBA) {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
 }

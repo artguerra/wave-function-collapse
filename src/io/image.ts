@@ -1,5 +1,6 @@
 import { idx } from "@/utils/grid";
 import { PixelBlock } from "@/core/pixels";
+import type { PixelData } from "@/core/types";
 
 const N_CHANNELS = 4;
 
@@ -11,8 +12,8 @@ export async function extractPixelBlocks(
 
   const png = await decodePNG(path);
 
-  if (png.width % ksize != 0 || png.height % ksize != 0)
-    throw Error("Image not compatible with tile size");
+  // if (png.width % ksize != 0 || png.height % ksize != 0)
+  //   throw Error("Image not compatible with tile size");
 
   const pad = (ksize - 1) / 2;
   const outWidth = png.width - ksize + 1;
@@ -26,7 +27,6 @@ export async function extractPixelBlocks(
       for (let innerY = y - pad; innerY <= y + pad; ++innerY) {
         for (let innerX = x - pad; innerX <= x + pad; ++innerX) {
           const blockIdx = idx(innerY + pad - y, innerX + pad - x, ksize);
-
           const imgIdx = idx(innerY, innerX, png.width) * N_CHANNELS;
 
           // only RGBA values for now
@@ -71,9 +71,9 @@ async function decodePNG(url: string): Promise<PngResponse> {
   return { width: w, height: h, data: buf };
 }
 
-export function previewPixelBlocks(
+export function previewTiles(
   target: HTMLElement,
-  blocks: PixelBlock[],
+  blocks: PixelData[],
   cols: number = 16,
   scale = 16,
   gap = 2,

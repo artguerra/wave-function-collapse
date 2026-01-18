@@ -4,6 +4,7 @@ export class PixelBlock implements PixelData {
   private _hash?: string;
   private _averageColor: RGBA;
   private _averageCalculated: boolean;
+
   values: RGBA[];
   ksize: number;
 
@@ -18,6 +19,10 @@ export class PixelBlock implements PixelData {
   setAll(color: RGBA): void {
     this.values = new Array(this.ksize * this.ksize).fill(color);
     this.calculateAverage();
+  }
+
+  get mainColor(): RGBA {
+    return this.values[this.values.length >>> 1];
   }
 
   get averageColor(): RGBA {

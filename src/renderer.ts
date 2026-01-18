@@ -115,7 +115,7 @@ export function initGPUBuffers(app: GPUAppPipeline): GPUApp {
     label: "cell data storage uniform buffer",
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     size: (app.dimensions.grid.width * app.dimensions.grid.height) // for each tile (x, y)
-      * (app.dimensions.tileSize * app.dimensions.tileSize) // pixels for each tile
+      // * (app.dimensions.tileSize * app.dimensions.tileSize) // pixels for each tile
       * 4 * 4, // RGBA and 4 bytes each
   });
 

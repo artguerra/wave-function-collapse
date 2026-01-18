@@ -1,5 +1,5 @@
 import { assert } from "@/utils";
-import { extractPixelBlocks, previewPixelBlocks } from "@/io/image";
+import { extractPixelBlocks, previewTiles } from "@/io/image";
 import { createTileset } from "@/core/tileset";
 import { Wave } from "@/core/solver/wave";
 import { type GPUAppBase, initWebGPU, initRenderPipeline, render, initGPUBuffers, updateCellData } from "@/renderer";
@@ -7,10 +7,10 @@ import { type GPUAppBase, initWebGPU, initRenderPipeline, render, initGPUBuffers
 import flowers from "@assets/flowers.png";
 
 const TILE_SIZE = 3;
-const GRID_WIDTH = 16;
-const GRID_HEIGHT = 16;
-const CANVAS_WIDTH = 640;
-const CANVAS_HEIGHT = 640;
+const GRID_WIDTH = 64;
+const GRID_HEIGHT = 64;
+const CANVAS_WIDTH = 712;
+const CANVAS_HEIGHT = 712;
 
 (async () => {
   // WEBGPU initalization
@@ -47,15 +47,18 @@ const CANVAS_HEIGHT = 640;
   const gpuAppPipeline = initRenderPipeline(gpuAppBase);
   const gpuApp = initGPUBuffers(gpuAppPipeline);
 
-  wave.collapse(() => {
+  wave.collapse(async () => {
+    function timeout(ms: number) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     updateCellData(gpuApp, wave.getCurrentColorsFlat());
+    await timeout(0.1);
   });
 
   setInterval(() => render(gpuApp), 16.6);
 
-  // previewPixelBlocks(document.querySelector("body")!, blocks, cols);
-  // previewPixelBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels), cols);
-
+  // previewTiles(document.querySelector("body")!, tileset.tiles.map(t => t.pixels), cols);
 
   // const observer = new ResizeObserver(() => {
   //   canvas.width = canvas.clientWidth;

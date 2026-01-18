@@ -1,6 +1,6 @@
 import { assert } from "@/utils";
 
-export class Bitset implements Iterable<[number, boolean]> {
+export class Bitset implements Iterable<number> {
   readonly size: number;
   readonly data: Uint32Array;
   readonly words: number;
@@ -13,7 +13,7 @@ export class Bitset implements Iterable<[number, boolean]> {
 
     if (data) {
       assert(data.length === this.words, "Bitset data has wrong length");
-      this.data = data;
+      this.data = new Uint32Array(data);
       return;
     }
 
@@ -43,10 +43,42 @@ export class Bitset implements Iterable<[number, boolean]> {
     return (this.data[n >>> 5] & (1 << (n & 31))) !== 0;
   }
 
-  *[Symbol.iterator](): IterableIterator<[number, boolean]> {
-    for (let i = 0; i < this.size; ++i) {
-      yield [i, this.getBit(i)];
-    }
+  bitwiseAnd(other: Bitset): Bitset {
+    assert(this.size == other.size, "Bitsets must have the same length for the bitwise operation.");
+    const res = new Bitset(this.size, false, this.data);
+
+    for (let i = 0; i < this.words; ++i)
+      res.data[i] = this.data[i] & other.data[i];
+
+    return res;
   }
 
+  count(): number {
+    let count = 0;
+
+    for (let i = 0; i < this.words; i++) {
+      let n = this.data[i];
+
+      // hamming weight
+      n = n - ((n >>> 1) & 0x55555555);
+      n = (n & 0x33333333) + ((n >>> 2) & 0x33333333);
+      n = (n + (n >>> 4)) & 0x0F0F0F0F;
+      n = n + (n >>> 8);
+      n = n + (n >>> 16);
+      
+      count += (n & 0x3F);
+    }
+
+    return count;
+  }
+
+  *bits(): IterableIterator<[number, boolean]> {
+    for (let i = 0; i < this.size; ++i)
+      yield [i, this.getBit(i)];
+  }
+
+  *[Symbol.iterator](): IterableIterator<number> {
+    for (let i = 0; i < this.size; ++i)
+      if (this.getBit(i)) yield i;
+  }
 }
