@@ -1,5 +1,5 @@
 import displayShaders from "@/shaders/display.wgsl";
-import type { Dimensions } from "./core/types";
+import type { Dimensions } from "@/core/types";
 
 export interface AppDimensions {
   grid: Dimensions;

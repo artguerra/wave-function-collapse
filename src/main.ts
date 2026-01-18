@@ -7,8 +7,8 @@ import { type GPUAppBase, initWebGPU, initRenderPipeline, render, initGPUBuffers
 import flowers from "@assets/flowers.png";
 
 const TILE_SIZE = 3;
-const GRID_WIDTH = 64;
-const GRID_HEIGHT = 64;
+const GRID_WIDTH = 32;
+const GRID_HEIGHT = 32;
 const CANVAS_WIDTH = 712;
 const CANVAS_HEIGHT = 712;
 
@@ -53,7 +53,7 @@ const CANVAS_HEIGHT = 712;
     }
 
     updateCellData(gpuApp, wave.getCurrentColorsFlat());
-    await timeout(0.1);
+    await timeout(1);
   });
 
   setInterval(() => render(gpuApp), 16.6);

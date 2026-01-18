@@ -42,7 +42,7 @@ export class Cell {
   }
 
   // choose at random one of the remaining states, considering tileset frequencies
-  collapse(waveBan: (t: number) => void): boolean {
+  chooseRandomTile(): number {
     const currentFrequencies: number[] = [];
     let sumFrequencies = 0;
 
@@ -53,34 +53,26 @@ export class Cell {
       sumFrequencies += freq;
     }
 
-    if (sumFrequencies == 0) {
-      console.log("Reached a contradiction.");
-      return false;
-    }
+    if (sumFrequencies == 0) return -1;
 
     const threshold = Math.random() * sumFrequencies;    
 
     let currentSum = 0;
-    let finalIdx = -1;
     for (let i = 0; i < currentFrequencies.length; ++i) {
       currentSum += currentFrequencies[i];
 
-      if (currentSum > threshold) {
-        finalIdx = i;
-        break;
-      }
+      if (currentSum > threshold) return i;
     }
 
-    for (let i = 0; i < this.tileset.size; ++i)
-      if (i != finalIdx) waveBan(i);
+    return -1;
+  }
 
+  collapseTo(tileIdx: number): void {
     this.isCollapsed = true;
-    this.collapsedState = finalIdx;
+    this.collapsedState = tileIdx;
     this.entropy = 0;
 
-    this.currentColor = this.tileset.tiles[finalIdx].pixels.mainColor;
-
-    return true;
+    this.currentColor = this.tileset.tiles[tileIdx].pixels.mainColor;
   }
 
   // disallow tile in this cell (updates states)
@@ -89,9 +81,6 @@ export class Cell {
 
     this.possibleStates.unsetBit(tileIdx);
     this.remainingStates -= 1;
-
-    // @TODO add to propagate stack
-    // @TODO update supporters data structure
 
     const freq = this.tileset.frequencies[tileIdx];
     this.sumWeights -= freq;
