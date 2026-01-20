@@ -1,10 +1,11 @@
 import displayShaders from "@/shaders/display.wgsl";
-import type { Dimensions } from "@/core/types";
+import type { Dimensions, Vec2 } from "@/core/types";
 
 export interface AppDimensions {
   grid: Dimensions;
   canvas: Dimensions;
   tileSize: number;
+  pan: Vec2;
 }
 
 export interface GPUAppBase {
@@ -100,7 +101,9 @@ export function initGPUBuffers(app: GPUAppPipeline): GPUApp {
     app.dimensions.canvas.width,
     app.dimensions.canvas.height,
     app.dimensions.tileSize,
-    0
+    0,
+    app.dimensions.pan.x,
+    app.dimensions.pan.y,
   ]);
 
   const uniformBuffer = app.device.createBuffer({
@@ -144,6 +147,10 @@ export function updateCellData(app: GPUApp, data: Float32Array | Array<number>):
     throw Error("Tried to update cell data with invalid size.")
 
   app.device.queue.writeBuffer(app.cellDataBuffer, 0, arr);
+}
+
+export function updatePanData(app: GPUApp, pan: Vec2) {
+  app.device.queue.writeBuffer(app.uniformBuffer, 24, new Float32Array([pan.x, pan.y]));
 }
 
 export function render(app: GPUApp): void {
