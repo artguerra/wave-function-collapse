@@ -7,6 +7,7 @@ type Heuristic = "SCANLINE" | "ENTROPY";
 
 export class Wave {
   heuristic: Heuristic;
+  toroidal: boolean;
 
   width: number;
   height: number;
@@ -21,16 +22,19 @@ export class Wave {
   // propagation data structures
   propagationStack: [cell: number, tile: number][];
   supporters: number[][][]; // how many supporters a specific tile in a specific cell has in each direction
-  nCollapsed: number;
 
-  constructor(width: number, height: number, tileset: Tileset, heuristic: Heuristic = "ENTROPY") {
+  constructor(
+    width: number, height: number,
+    tileset: Tileset, heuristic: Heuristic = "ENTROPY",
+    toroidal: boolean = false
+  ) {
     this.heuristic = heuristic;
+    this.toroidal = toroidal;
 
     this.width = width;
     this.height = height;
     this.waveSize = width * height;
 
-    this.nCollapsed = 0;
     this.propagationStack = [];
     this.supporters = Array.from({ length: this.waveSize }, () =>
       Array.from({ length: tileset.size }, () => new Array(4))
@@ -40,7 +44,7 @@ export class Wave {
     this.wave = new Array<Cell>(this.waveSize);
 
     this.totalWeightSum = 0;
-    this. totalWeightLogWeightsSum = 0;
+    this.totalWeightLogWeightsSum = 0;
     for (const freq of tileset.frequencies) {
       this.totalWeightSum += freq;
       this.totalWeightLogWeightsSum += freq * Math.log(freq);
@@ -52,29 +56,38 @@ export class Wave {
   async collapse(
     onPropagate: () => Promise<void>
   ): Promise<void> {
-    while (this.nCollapsed != this.waveSize) {
+    let cell = this.chooseNextCell();
+    while (cell != -1) {
       try {
-        const cell = this.chooseNextCell();
-        if (cell == -1) throw Error("Could not choose next cell to collapse.");
-
         if (!this.observe(cell))
           throw "WFC reached an impossible state while observing.";
-
         if (!this.propagate())
           throw "WFC reached an impossible state while propagating.";
-      } catch(msg) {
+      } catch (msg) {
         console.warn(msg);
         this.reset();
       }
 
       await onPropagate();
+      cell = this.chooseNextCell();
     }
+
+    // all tiles chosen here
   }
 
   chooseNextCell(): number {
+    const ksize = this.tileset.tileSize;
+
     if (this.heuristic == "SCANLINE") {
-      for (let i = 0; i < this.waveSize; ++i)
+      for (let i = 0; i < this.waveSize; ++i) {
+        // check if overlapping block can be placed
+        if (!this.toroidal) {
+          if (this.wave[i].pos.x + ksize > this.width || this.wave[i].pos.y + ksize > this.height)
+            continue;
+        }
+
         if (!this.wave[i].isCollapsed) return i;
+      }
     }
 
     if (this.heuristic == "ENTROPY") {
@@ -82,6 +95,12 @@ export class Wave {
       let minIdx = 0;
 
       for (let i = 0; i < this.waveSize; ++i) {
+        // check if overlapping block can be placed
+        if (!this.toroidal) {
+          if (this.wave[i].pos.x + ksize > this.width || this.wave[i].pos.y + ksize > this.height)
+            continue;
+        }
+
         if (!this.wave[i].isCollapsed) {
           const noise = Math.random() * 1e-6;
           const entropy = this.wave[i].entropy + noise;
@@ -113,7 +132,6 @@ export class Wave {
     }
 
     cell.collapseTo(chosenTile);
-    this.nCollapsed++;
 
     return true;
   }
@@ -125,8 +143,13 @@ export class Wave {
       const pos: Vec2 = this.wave[cell].pos;
 
       for (let d = 0; d < 4; ++d) {
-        const nx = pos.x + DX[d];
-        const ny = pos.y + DY[d];
+        let nx = pos.x + DX[d];
+        let ny = pos.y + DY[d];
+
+        if (this.toroidal) {
+          nx = (this.width + nx) % this.width;
+          ny = (this.height + ny) % this.height;
+        }
 
         if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
 
@@ -157,7 +180,6 @@ export class Wave {
   }
 
   reset(): void {
-    this.nCollapsed = 0;
     this.propagationStack = [];
 
     let i = 0;

@@ -22,7 +22,7 @@ export class PixelBlock implements PixelData {
   }
 
   get mainColor(): RGBA {
-    return this.values[this.values.length >>> 1];
+    return this.values[0];
   }
 
   get averageColor(): RGBA {

@@ -19,7 +19,7 @@ export class Cell {
   sumWeightLogWeights: number;
   entropy: number;
 
-  constructor(pos: Vec2, tileset: Tileset) {
+  constructor(pos: Vec2, tileset: Tileset, weightSum: number, weightLogWeightSum: number) {
     this.pos = pos;
     this.tileset = tileset;
     this.possibleStates = new Bitset(tileset.size, true);
@@ -27,14 +27,8 @@ export class Cell {
 
     this.currentColor = tileset.averageColor;
 
-    this.sumWeights = 0;
-    this.sumWeightLogWeights = 0;
-
-    // @TODO pass this in the constructor from the wave function
-    for (const freq of tileset.frequencies) {
-      this.sumWeights += freq;
-      this.sumWeightLogWeights += freq * Math.log(freq);
-    }
+    this.sumWeights = weightSum;
+    this.sumWeightLogWeights = weightLogWeightSum;
 
     this.entropy = Math.log(this.sumWeights) - this.sumWeightLogWeights / this.sumWeights;
 

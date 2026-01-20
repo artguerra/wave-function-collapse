@@ -12,6 +12,8 @@ const GRID_HEIGHT = 32;
 const CANVAS_WIDTH = 712;
 const CANVAS_HEIGHT = 712;
 
+const TOROIDAL_GENERATION = false;
+
 (async () => {
   // WEBGPU initalization
   const canvas = document.querySelector<HTMLCanvasElement>("canvas");
@@ -42,7 +44,7 @@ const CANVAS_HEIGHT = 712;
   const { blocks, cols } = await extractPixelBlocks(flowers, TILE_SIZE);
   const tileset = createTileset(TILE_SIZE, blocks, cols);
 
-  const wave = new Wave(GRID_WIDTH, GRID_HEIGHT, tileset);
+  const wave = new Wave(GRID_WIDTH, GRID_HEIGHT, tileset, "ENTROPY", TOROIDAL_GENERATION);
 
   const gpuAppPipeline = initRenderPipeline(gpuAppBase);
   const gpuApp = initGPUBuffers(gpuAppPipeline);
