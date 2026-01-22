@@ -1,7 +1,7 @@
-import { idx } from "@/utils/grid";
+import { idx, coord, DX, DY, OPPOSITE } from "@/utils/grid";
 import { Bitset } from "@/core/bitset";
 import { PixelBlock } from "@/core/pixels";
-import { OPPOSITE, type RGBA, type Tile } from "@/core/types";
+import { type RGBA, type Tile } from "@/core/types";
 
 export class Tileset {
   readonly size: number;
@@ -33,32 +33,32 @@ export class Tileset {
 }
 
 // `cols` is needed to gather adjecency information
-export function createTileset(tileSize: number, rawTiles: PixelBlock[], cols: number): Tileset {
+export function createTileset(
+  tileSize: number,
+  rawTiles: PixelBlock[],
+  overlapping: boolean,
+): Tileset {
   const tiles: Tile[] = [];
   const frequencies: number[] = [];
-  const rows = rawTiles.length / cols;
 
   const tileIndexMap = new Map<string, Tile["id"]>();
 
-  for (let y = 0; y < rows; ++y) {
-    for (let x = 0; x < cols; ++x) {
-      // create new tile in the tileset (if necessary)
-      const tileIdx = idx(y, x, cols);
-      const pixels = rawTiles[tileIdx];
-      const hash = pixels.hash;
+  // create new unique tiles in the tileset
+  for (let i = 0; i < rawTiles.length; ++i) {
+    const hash = rawTiles[i].hash;
 
-      if (!tileIndexMap.has(hash)) {
-        const id = tiles.length;
-        tiles.push({ id, pixels });
+    if (!tileIndexMap.has(hash)) {
+      const id = tiles.length;
+      tiles.push({ id, pixels: rawTiles[i] });
 
-        frequencies.push(1);
-        tileIndexMap.set(hash, id);
-      } else {
-        frequencies[tileIndexMap.get(hash)!] += 1;
-      }
+      frequencies.push(1);
+      tileIndexMap.set(hash, id);
+    } else {
+      frequencies[tileIndexMap.get(hash)!] += 1;
     }
   }
 
+  // find allowed neighbors
   const nTiles = tiles.length;
   const allowed: Tileset["allowedNeighbors"] = [
     Array.from({ length: nTiles }, () => new Bitset(nTiles)), // W
@@ -67,22 +67,31 @@ export function createTileset(tileSize: number, rawTiles: PixelBlock[], cols: nu
     Array.from({ length: nTiles }, () => new Bitset(nTiles)), // S
   ];
   
-  for (const tileIdx of tileIndexMap.values()) {
-    const tile = tiles[tileIdx];
 
-    for (const neighIdx of tileIndexMap.values()) {
-      const neighbor = tiles[neighIdx];
+  // overlapping model: check every other tile for compatibility
+  if (overlapping) {
+    for (const tileIdx of tileIndexMap.values()) {
+      const tile = tiles[tileIdx];
 
-      for (let d = 0; d < 4; ++d) {
-        if (allowed[d][tileIdx].getBit(neighIdx)) continue; // already computed
+      for (const neighIdx of tileIndexMap.values()) {
+        const neighbor = tiles[neighIdx];
 
-        if (compatible(tile, neighbor, d)) {
-          allowed[d][tileIdx].setBit(neighIdx);
-          allowed[OPPOSITE[d]][neighIdx].setBit(tileIdx);
+        for (let d = 0; d < 4; ++d) {
+          if (allowed[d][tileIdx].getBit(neighIdx)) continue; // already computed
+
+          if (compatible(tile, neighbor, d)) {
+            allowed[d][tileIdx].setBit(neighIdx);
+            allowed[OPPOSITE[d]][neighIdx].setBit(tileIdx);
+          }
         }
       }
-    };
-  };
+    }
+  }
+
+  // simple tiled model: check neighboring tiles in input
+  if (!overlapping) {
+    // @TODO implement tiled model
+  }
 
   // normalize frequencies
   let totalFrequency = 0;

@@ -7,45 +7,113 @@ const N_CHANNELS = 4;
 export async function extractPixelBlocks(
   path: string,
   ksize: number,
-): Promise<{ blocks: PixelBlock[]; cols: number }> {
+  symmetryMode: "ALL" | "MIRROR_X" | "MIRROR_Y" | "MIRROR_XY" | "NONE" = "ALL"
+): Promise<PixelBlock[]> {
   if (ksize % 2 == 0) throw Error("Kernel size must be odd");
 
   const png = await decodePNG(path);
 
-  // if (png.width % ksize != 0 || png.height % ksize != 0)
-  //   throw Error("Image not compatible with tile size");
-
   const pad = (ksize - 1) / 2;
-  const outWidth = png.width - ksize + 1;
 
   const blocks: PixelBlock[] = [];
 
   for (let y = pad; y < png.height - pad; ++y) {
     for (let x = pad; x < png.width - pad; ++x) {
+      const block = dataAt(png, y, x, ksize);
 
-      const block = new PixelBlock(ksize);
-      for (let innerY = y - pad; innerY <= y + pad; ++innerY) {
-        for (let innerX = x - pad; innerX <= x + pad; ++innerX) {
-          const blockIdx = idx(innerY + pad - y, innerX + pad - x, ksize);
-          const imgIdx = idx(innerY, innerX, png.width) * N_CHANNELS;
+      blocks.push(block);
 
-          // only RGBA values for now
-          block.values[blockIdx] = [
-            png.data[imgIdx],
-            png.data[imgIdx + 1],
-            png.data[imgIdx + 2],
-            png.data[imgIdx + 3],
-          ];
-
-        }
+      if (symmetryMode == "MIRROR_X") {
+        blocks.push(mirrorBlockX(block));
       }
 
-      block.calculateAverage();
-      blocks.push(block);
+      if (symmetryMode == "MIRROR_Y") {
+        blocks.push(mirrorBlockX(block));
+      }
+
+      if (symmetryMode == "MIRROR_XY") {
+        blocks.push(mirrorBlockX(block));
+        blocks.push(mirrorBlockY(block));
+        blocks.push(mirrorBlockY(mirrorBlockX(block)));
+      }
+
+      if (symmetryMode == "ALL") {
+        let current = block;
+        blocks.push(mirrorBlockX(current));
+
+        for (let r = 0; r < 3; ++r) {
+          const rotated = rotateBlock90(current);
+
+          blocks.push(rotated);
+          blocks.push(mirrorBlockX(rotated));
+
+          current = rotated;
+        }
+      }
     }
   }
 
-  return { blocks, cols: outWidth };
+  return blocks;
+}
+
+function dataAt(png: PngResponse, y: number, x: number, ksize: number) {
+  const pad = (ksize - 1) / 2;
+  const block = new PixelBlock(ksize);
+
+  for (let innerY = y - pad; innerY <= y + pad; ++innerY) {
+    for (let innerX = x - pad; innerX <= x + pad; ++innerX) {
+      const blockIdx = idx(innerY + pad - y, innerX + pad - x, ksize);
+      const imgIdx = idx(innerY, innerX, png.width) * N_CHANNELS;
+
+      // only RGBA values for now
+      block.values[blockIdx] = [
+        png.data[imgIdx],
+        png.data[imgIdx + 1],
+        png.data[imgIdx + 2],
+        png.data[imgIdx + 3],
+      ];
+
+    }
+  }
+
+  block.calculateAverage();
+  return block;
+}
+
+function mirrorBlockX(block: PixelBlock): PixelBlock {
+  const ksize = block.ksize;
+  const mirrored = new PixelBlock(ksize);
+  
+  for (let y = 0; y < ksize; ++y)
+    for (let x = 0; x < ksize; ++x)
+      mirrored.values[idx(y, x, ksize)] = block.values[idx(y, ksize - 1 - x, ksize)];
+
+  mirrored.calculateAverage();
+  return mirrored;
+}
+
+function mirrorBlockY(block: PixelBlock): PixelBlock {
+  const ksize = block.ksize;
+  const mirrored = new PixelBlock(ksize);
+  
+  for (let y = 0; y < ksize; ++y)
+    for (let x = 0; x < ksize; ++x)
+      mirrored.values[idx(y, x, ksize)] = block.values[idx(ksize - 1 - y, x, ksize)];
+
+  mirrored.calculateAverage();
+  return mirrored;
+}
+
+function rotateBlock90(block: PixelBlock): PixelBlock {
+  const ksize = block.ksize;
+  const rotated = new PixelBlock(ksize);
+
+  for (let y = 0; y < ksize; ++y)
+    for (let x = 0; x < ksize; ++x)
+      rotated.values[idx(y, x, ksize)] = block.values[idx(x, ksize - 1 - y, ksize)];
+
+  rotated.calculateAverage();
+  return rotated;
 }
 
 type PngResponse = {
@@ -71,7 +139,7 @@ async function decodePNG(url: string): Promise<PngResponse> {
   return { width: w, height: h, data: buf };
 }
 
-export function previewTiles(
+export function previewBlocks(
   target: HTMLElement,
   blocks: PixelData[],
   cols: number = 16,

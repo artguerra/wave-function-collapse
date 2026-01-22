@@ -1,6 +1,6 @@
 import { assert } from "@/utils";
 
-import { extractPixelBlocks, previewTiles } from "@/io/image";
+import { extractPixelBlocks, previewBlocks } from "@/io/image";
 
 import type { Vec2 } from "@/core/types";
 import { createTileset } from "@/core/tileset";
@@ -10,7 +10,7 @@ import {
   render, initGPUBuffers, updateCellData, updatePanData
 } from "@/renderer";
 
-import input from "@assets/flowers.png";
+import input from "@assets/MagicOffice.png";
 
 // global configurations
 const TILE_SIZE = 3;
@@ -19,8 +19,11 @@ const GRID_HEIGHT = 32;
 const CANVAS_WIDTH = 712;
 const CANVAS_HEIGHT = 712;
 
-const HEURISTIC: Wave["heuristic"] = "SCANLINE";
+// WFC parameters
+const SYMMETRY_MODE: "ALL" | "MIRROR_X" | "MIRROR_Y" | "MIRROR_XY" | "NONE" = "ALL";
+const HEURISTIC: Wave["heuristic"] = "ENTROPY";
 const TOROIDAL_GENERATION = true;
+const OVERLAPPING_MODEL = true;
 
 // global UI control variables
 // @TODO define more sophisticated camera struct
@@ -84,8 +87,8 @@ async function main() {
   }
 
   // WFC setup
-  const { blocks, cols } = await extractPixelBlocks(input, TILE_SIZE);
-  const tileset = createTileset(TILE_SIZE, blocks, cols);
+  const blocks = await extractPixelBlocks(input, TILE_SIZE, SYMMETRY_MODE);
+  const tileset = createTileset(TILE_SIZE, blocks, OVERLAPPING_MODEL);
 
   const wave = new Wave(GRID_WIDTH, GRID_HEIGHT, tileset, HEURISTIC, TOROIDAL_GENERATION);
 
@@ -104,7 +107,7 @@ async function main() {
   });
 
   setInterval(() => render(gpuApp), 16.6);
-  // previewTiles(document.querySelector("body")!, tileset.tiles.map(t => t.pixels), cols);
+  previewBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels));
 }
 
 main();

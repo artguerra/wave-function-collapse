@@ -1,7 +1,7 @@
-import { DX, DY, OPPOSITE, type Vec2 } from "@/core/types.ts";
+import { type Vec2 } from "@/core/types.ts";
 import { Tileset } from "@/core/tileset";
 import { Cell } from "@/core/solver/cell";
-import { idx } from "@/utils/grid.ts";
+import { idx, DX, DY, OPPOSITE } from "@/utils/grid.ts";
 
 type Heuristic = "SCANLINE" | "ENTROPY";
 
