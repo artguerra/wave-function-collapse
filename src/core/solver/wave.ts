@@ -1,4 +1,4 @@
-import { type Vec2 } from "@/core/types.ts";
+import type { Vec2 } from "@/core/types.ts";
 import { Tileset } from "@/core/tileset";
 import { Cell } from "@/core/solver/cell";
 import { idx, DX, DY, OPPOSITE } from "@/utils/grid.ts";
@@ -122,11 +122,6 @@ export class Wave {
     const cell = this.wave[cellIdx];
     const chosenTile = cell.chooseRandomTile();
 
-    if (chosenTile == -1) {
-      console.warn("Contradiction reached when observing cell: " + cellIdx);
-      return false;
-    }
-
     for (const tileIdx of cell.possibleStates) {
       if (tileIdx != chosenTile) this.ban(cellIdx, tileIdx);
     }
@@ -186,7 +181,7 @@ export class Wave {
     for (let y = 0; y < this.height; ++y) {
       for (let x = 0; x < this.width; ++x) {
         this.wave[i++] = new Cell(
-          { x, y }, this.tileset, this.totalWeightSum, this.totalWeightLogWeightsSum
+          { x, y }, this.tileset, this.totalWeightSum, this.totalWeightLogWeightsSum,
         );
       }
     }

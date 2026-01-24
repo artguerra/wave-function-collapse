@@ -12,6 +12,7 @@ export class Cell {
   isCollapsed: boolean;
   collapsedState: number | undefined; // final state (if collapsed)
 
+  colorSum: RGBA;
   currentColor: RGBA;
 
   // entropy related values
@@ -25,7 +26,9 @@ export class Cell {
     this.possibleStates = new Bitset(tileset.size, true);
     this.remainingStates = tileset.size;
 
-    this.currentColor = tileset.averageColor;
+    this.colorSum = [...tileset.totalColorSum];
+    this.currentColor = [0, 0, 0, 0];
+    this.updateAverageColor();
 
     this.sumWeights = weightSum;
     this.sumWeightLogWeights = weightLogWeightSum;
@@ -40,11 +43,14 @@ export class Cell {
     const currentFrequencies: number[] = [];
     let sumFrequencies = 0;
 
+    let lastValidIdx = 0;
     for (const [idx, possible] of this.possibleStates.bits()) {
       const freq = possible ? this.tileset.frequencies[idx] : 0;
 
       currentFrequencies.push(freq);
       sumFrequencies += freq;
+
+      if (possible) lastValidIdx = idx;
     }
 
     if (sumFrequencies == 0) return -1;
@@ -55,10 +61,11 @@ export class Cell {
     for (let i = 0; i < currentFrequencies.length; ++i) {
       currentSum += currentFrequencies[i];
 
-      if (currentSum > threshold) return i;
+
+      if (currentSum >= threshold) return i;
     }
 
-    return -1;
+    return lastValidIdx;
   }
 
   collapseTo(tileIdx: number): void {
@@ -81,20 +88,24 @@ export class Cell {
     this.sumWeightLogWeights -= Math.log(freq) * freq;
     this.entropy = Math.log(this.sumWeights) - this.sumWeightLogWeights / this.sumWeights;
 
-    this.updateCurrentColors();
+    for (let i = 0; i < 4; ++i)
+      this.colorSum[i] -= this.tileset.tiles[tileIdx].pixels.mainColor[i];
+
+    this.updateAverageColor();
 
     return true;
   }
 
-  updateCurrentColors(): void {
-    const avg: RGBA = [0, 0, 0, 0];
-    for (const allowed of this.possibleStates) {
-      for (let i = 0; i < 4; ++i) avg[i] += this.tileset.tiles[allowed].pixels.mainColor[i];
+  updateAverageColor(): void {
+    if (this.remainingStates > 0) {
+      this.currentColor = [
+        this.colorSum[0] / this.remainingStates,
+        this.colorSum[1] / this.remainingStates,
+        this.colorSum[2] / this.remainingStates,
+        this.colorSum[3] / this.remainingStates,
+      ];
+    } else {
+        this.currentColor = [0, 0, 0, 255]; // contradiction: black
     }
-    
-    const total = this.possibleStates.count();
-    for (let i = 0; i < 4; ++i) avg[i] /= total;
-
-    this.currentColor = avg;
   }
 }

@@ -1,4 +1,4 @@
-import { idx, coord, DX, DY, OPPOSITE } from "@/utils/grid";
+import { idx, OPPOSITE } from "@/utils/grid";
 import { Bitset } from "@/core/bitset";
 import { PixelBlock } from "@/core/pixels";
 import { type RGBA, type Tile } from "@/core/types";
@@ -15,20 +15,34 @@ export class Tileset {
   ];
   readonly frequencies: Float32Array;
   readonly averageColor: RGBA;
+  readonly totalColorSum: RGBA; // for progressive color updates
 
   constructor(
     tileSize: number,
     tiles: Tile[],
-    averageColor: RGBA,
     weights: number[],
     allowed: [Bitset[], Bitset[], Bitset[], Bitset[]],
   ) {
     this.tileSize = tileSize;
     this.tiles = tiles;
-    this.averageColor = averageColor;
     this.size = tiles.length;
     this.allowedNeighbors = allowed;
     this.frequencies = new Float32Array(weights);
+
+    // calculate average color
+    const avgColorSum = [0, 0, 0, 0];
+    for (const tile of tiles) {
+      for (let i = 0; i < 4; ++i) avgColorSum[i] += tile.pixels.averageColor[i];
+    }
+    this.averageColor = avgColorSum.map(s => s / tiles.length) as RGBA;
+
+    // calculate total sum of tiles main colors
+    this.totalColorSum = [0, 0, 0, 0];
+    for(const tile of tiles) {
+      for(let i = 0; i < 4; ++i) {
+        this.totalColorSum[i] += tile.pixels.mainColor[i];
+      }
+    }
   }
 }
 
@@ -101,15 +115,7 @@ export function createTileset(
 
   const normalizedFrequencies = frequencies.map(f => f / totalFrequency);
 
-  // calculate average color
-  const channels = 4;
-  const colorSum = new Array(channels).fill(0);
-  for (const tile of tiles) {
-    for (let i = 0; i < channels; ++i) colorSum[i] += tile.pixels.averageColor[i];
-  }
-  const average = colorSum.map(s => s / tiles.length) as RGBA;
-
-  return new Tileset(tileSize, tiles, average, normalizedFrequencies, allowed);
+  return new Tileset(tileSize, tiles, normalizedFrequencies, allowed);
 }
 
 function compatible(tile: Tile, neighbor: Tile, dir: number): boolean {

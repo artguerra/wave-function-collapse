@@ -105,9 +105,10 @@ async function main() {
     updateCellData(gpuApp, wave.getCurrentColorsFlat());
     await timeout(1);
   });
+  // updateCellData(gpuApp, wave.getCurrentColorsFlat());
 
   setInterval(() => render(gpuApp), 16.6);
-  previewBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels));
+  // previewBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels));
 }
 
 main();
