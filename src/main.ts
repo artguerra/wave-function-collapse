@@ -1,9 +1,10 @@
 import { assert } from "@/utils";
+import { previewBlocks } from "./utils/image.ts";
 
-import { extractPixelBlocks, previewBlocks } from "@/io/image";
+import { createOverlappingTileset } from "@/io/overlapping";
+import { SimpleTilesetParser } from "./io/simple-tiled.ts";
 
-import type { Vec2 } from "@/core/types";
-import { createTileset } from "@/core/tileset";
+import type { SymmetryMode, Vec2 } from "@/core/types";
 import { Wave } from "@/core/solver/wave";
 import {
   type GPUAppBase, type GPUApp, initWebGPU, initRenderPipeline,
@@ -11,17 +12,18 @@ import {
 } from "@/renderer";
 
 import input from "@assets/MagicOffice.png";
+import simpleTiles from "@assets/tilesets/castle/castle.xml?raw"
 
 // global configurations
 const TILE_SIZE = 3;
-const GRID_WIDTH = 32;
-const GRID_HEIGHT = 32;
+const GRID_WIDTH = 16;
+const GRID_HEIGHT = 16;
 const CANVAS_WIDTH = 712;
 const CANVAS_HEIGHT = 712;
 
 // WFC parameters
-const SYMMETRY_MODE: "ALL" | "MIRROR_X" | "MIRROR_Y" | "MIRROR_XY" | "NONE" = "ALL";
-const HEURISTIC: Wave["heuristic"] = "ENTROPY";
+const SYMMETRY_MODE: SymmetryMode = "ALL";
+const HEURISTIC: Wave["heuristic"] = "SCANLINE";
 const TOROIDAL_GENERATION = true;
 const OVERLAPPING_MODEL = true;
 
@@ -87,9 +89,9 @@ async function main() {
   }
 
   // WFC setup
-  const blocks = await extractPixelBlocks(input, TILE_SIZE, SYMMETRY_MODE);
-  const tileset = createTileset(TILE_SIZE, blocks, OVERLAPPING_MODEL);
-
+  const tileset = await SimpleTilesetParser.load(simpleTiles, "../assets/tilesets/castle/");
+  // const tileset = await createOverlappingTileset(input, TILE_SIZE, SYMMETRY_MODE);
+  
   const wave = new Wave(GRID_WIDTH, GRID_HEIGHT, tileset, HEURISTIC, TOROIDAL_GENERATION);
 
   const gpuAppPipeline = initRenderPipeline(gpuAppBase);
@@ -105,10 +107,9 @@ async function main() {
     updateCellData(gpuApp, wave.getCurrentColorsFlat());
     await timeout(1);
   });
-  // updateCellData(gpuApp, wave.getCurrentColorsFlat());
 
   setInterval(() => render(gpuApp), 16.6);
-  // previewBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels));
+  previewBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels));
 }
 
 main();

@@ -73,6 +73,7 @@ export class Wave {
     }
 
     // all tiles chosen here
+    console.log("WFC finished.")
   }
 
   chooseNextCell(): number {

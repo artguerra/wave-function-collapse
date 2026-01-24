@@ -1,69 +1,39 @@
+import { assert } from "@/utils";
 import { idx } from "@/utils/grid";
 import { PixelBlock } from "@/core/pixels";
 import type { PixelData } from "@/core/types";
 
-const N_CHANNELS = 4;
+type PngResponse = {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+};
 
-export async function extractPixelBlocks(
-  path: string,
-  ksize: number,
-  symmetryMode: "ALL" | "MIRROR_X" | "MIRROR_Y" | "MIRROR_XY" | "NONE" = "ALL"
-): Promise<PixelBlock[]> {
-  if (ksize % 2 == 0) throw Error("Kernel size must be odd");
+export async function decodePNG(url: string): Promise<PngResponse> {
+  const res = await fetch(url);
+  const data = await res.blob();
 
-  const png = await decodePNG(path);
+  const dec = new ImageDecoder({ data: data.stream(), type: "image/png" });
+  const { image } = await dec.decode();
+  const { codedWidth: w, codedHeight: h } = image;
 
-  const pad = (ksize - 1) / 2;
+  const buf = new Uint8ClampedArray(w * h * 4);
+  await image.copyTo(buf, {
+    format: "RGBA",
+  });
+  image.close();
 
-  const blocks: PixelBlock[] = [];
-
-  for (let y = pad; y < png.height - pad; ++y) {
-    for (let x = pad; x < png.width - pad; ++x) {
-      const block = dataAt(png, y, x, ksize);
-
-      blocks.push(block);
-
-      if (symmetryMode == "MIRROR_X") {
-        blocks.push(mirrorBlockX(block));
-      }
-
-      if (symmetryMode == "MIRROR_Y") {
-        blocks.push(mirrorBlockX(block));
-      }
-
-      if (symmetryMode == "MIRROR_XY") {
-        blocks.push(mirrorBlockX(block));
-        blocks.push(mirrorBlockY(block));
-        blocks.push(mirrorBlockY(mirrorBlockX(block)));
-      }
-
-      if (symmetryMode == "ALL") {
-        let current = block;
-        blocks.push(mirrorBlockX(current));
-
-        for (let r = 0; r < 3; ++r) {
-          const rotated = rotateBlock90(current);
-
-          blocks.push(rotated);
-          blocks.push(mirrorBlockX(rotated));
-
-          current = rotated;
-        }
-      }
-    }
-  }
-
-  return blocks;
+  return { width: w, height: h, data: buf };
 }
 
-function dataAt(png: PngResponse, y: number, x: number, ksize: number) {
+export function dataAt(png: PngResponse, y: number, x: number, ksize: number) {
   const pad = (ksize - 1) / 2;
   const block = new PixelBlock(ksize);
 
   for (let innerY = y - pad; innerY <= y + pad; ++innerY) {
     for (let innerX = x - pad; innerX <= x + pad; ++innerX) {
       const blockIdx = idx(innerY + pad - y, innerX + pad - x, ksize);
-      const imgIdx = idx(innerY, innerX, png.width) * N_CHANNELS;
+      const imgIdx = idx(innerY, innerX, png.width) * 4;
 
       // only RGBA values for now
       block.values[blockIdx] = [
@@ -80,7 +50,29 @@ function dataAt(png: PngResponse, y: number, x: number, ksize: number) {
   return block;
 }
 
-function mirrorBlockX(block: PixelBlock): PixelBlock {
+export function pngToPixelBlock(png: PngResponse): PixelBlock {
+  assert(png.width === png.height, "PNG has to be a square image to generate a Pixel Block");
+
+  const block = new PixelBlock(png.width);
+  for (let y = 0; y < png.height; ++y) {
+    for (let x = 0; x < png.width; ++x) {
+      const blockIdx = idx(y, x, png.width);
+      const imgIdx = blockIdx * 4;
+
+      block.values[blockIdx] = [
+        png.data[imgIdx],
+        png.data[imgIdx + 1],
+        png.data[imgIdx + 2],
+        png.data[imgIdx + 3],
+      ];
+    }
+  }
+
+  block.calculateAverage();
+  return block;
+}
+
+export function mirrorBlockX(block: PixelBlock): PixelBlock {
   const ksize = block.ksize;
   const mirrored = new PixelBlock(ksize);
   
@@ -92,7 +84,7 @@ function mirrorBlockX(block: PixelBlock): PixelBlock {
   return mirrored;
 }
 
-function mirrorBlockY(block: PixelBlock): PixelBlock {
+export function mirrorBlockY(block: PixelBlock): PixelBlock {
   const ksize = block.ksize;
   const mirrored = new PixelBlock(ksize);
   
@@ -104,7 +96,7 @@ function mirrorBlockY(block: PixelBlock): PixelBlock {
   return mirrored;
 }
 
-function rotateBlock90(block: PixelBlock): PixelBlock {
+export function rotateBlock90(block: PixelBlock): PixelBlock {
   const ksize = block.ksize;
   const rotated = new PixelBlock(ksize);
 
@@ -114,29 +106,6 @@ function rotateBlock90(block: PixelBlock): PixelBlock {
 
   rotated.calculateAverage();
   return rotated;
-}
-
-type PngResponse = {
-  width: number;
-  height: number;
-  data: Uint8ClampedArray;
-};
-
-async function decodePNG(url: string): Promise<PngResponse> {
-  const res = await fetch(url);
-  const data = await res.blob();
-
-  const dec = new ImageDecoder({ data: data.stream(), type: "image/png" });
-  const { image } = await dec.decode();
-  const { codedWidth: w, codedHeight: h } = image;
-
-  const buf = new Uint8ClampedArray(w * h * N_CHANNELS);
-  await image.copyTo(buf, {
-    format: "RGBA",
-  });
-  image.close();
-
-  return { width: w, height: h, data: buf };
 }
 
 export function previewBlocks(

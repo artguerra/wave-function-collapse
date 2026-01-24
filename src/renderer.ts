@@ -1,4 +1,4 @@
-import displayShaders from "@/shaders/display.wgsl";
+import displayShaders from "@/shaders/display.wgsl?raw";
 import type { Dimensions, Vec2 } from "@/core/types";
 
 export interface AppDimensions {

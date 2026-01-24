@@ -1,5 +1,4 @@
 import path from "path";
-import rawPlugin from "vite-raw-plugin";
 
 export default {
   resolve: {
@@ -8,9 +7,4 @@ export default {
       "@assets": path.resolve(__dirname, "./assets/"),
     }
   },
-  plugins: [
-    rawPlugin({
-      fileRegex: /\.wgsl$/,
-    })
-  ],
 };

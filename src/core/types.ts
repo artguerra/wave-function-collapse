@@ -16,6 +16,8 @@ export interface Tile {
   pixels: PixelData;
 }
 
+export type SymmetryMode = "ALL" | "MIRROR_X" | "MIRROR_Y" | "MIRROR_XY" | "NONE";
+
 export interface Vec2 {
   x: number;
   y: number;
