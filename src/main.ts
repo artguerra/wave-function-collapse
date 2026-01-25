@@ -1,126 +1,187 @@
-import { assert } from "@/utils";
-import { previewBlocks } from "@/utils/image.ts";
-
 import { createOverlappingTileset } from "@/io/overlapping";
 import { createSimpleTiledTileset } from "@/io/simple-tiled.ts";
-
 import type { SymmetryMode, Vec2 } from "@/core/types";
-import type { Tileset } from "@/core/tileset";
 import { Wave } from "@/core/solver/wave";
-
 import {
   type GPUAppBase, type GPUApp, initWebGPU, initRenderPipeline,
   render, initGPUBuffers, updateTexture, updatePanData
 } from "@/renderer";
 
-import input from "@assets/MagicOffice.png";
-import simpleTiles from "@assets/tilesets/castle/castle.xml?raw"
+import imgCircle from "@assets/circle.png";
+import imgOffice from "@assets/MagicOffice.png";
+import imgSpirals from "@assets/Spirals.png";
+import imgWall from "@assets/wall.png";
+import imgFlowers from "@assets/flowers.png";
+import imgPlatformer from "@assets/platformer.png";
+import xmlCastle from "@assets/tilesets/castle/castle.xml?raw"  ;
 
 const SIMPLE_TILESET_PATH = "../assets/tilesets/castle/";
 
-// global configurations
-const TILE_SIZE = 3;
-const GRID_WIDTH = 24;
-const GRID_HEIGHT = 24;
+const IMAGES: Record<string, string> = {
+  "Magic Office": imgOffice,
+  "Circle": imgCircle,
+  "Spirals": imgSpirals,
+  "Wall": imgWall,
+  "Flowers": imgFlowers,
+  "Platformer": imgPlatformer,
+};
+
+// configuration
 const CANVAS_WIDTH = 712;
 const CANVAS_HEIGHT = 712;
+const GRID_WIDTH = 40;
+const GRID_HEIGHT = 40;
 
-// WFC parameters
-const OVERLAPPING_MODEL = true;
-const SYMMETRY_MODE: SymmetryMode = "NONE";
-const HEURISTIC: Wave["heuristic"] = "ENTROPY";
-const TOROIDAL_GENERATION = false;
-
-// global UI control variables
-// @TODO define more sophisticated camera struct
-let isDragging = false;
-let lastX = 0;
-let lastY = 0;
+let currentCancelToken = { cancelled: false };
+let gpuApp: GPUApp | null = null;
+let gpuBase: GPUAppBase | null = null;
 let pan: Vec2 = { x: 0, y: 0 };
 
-function setupListeners(app: GPUApp) {
-  app.canvas.addEventListener("mousedown", (e) => {
-    isDragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
+// ui references
+const ui = {
+  imgSelect: document.querySelector("#img-select") as HTMLSelectElement,
+  modelSelect: document.querySelector("#model-select") as HTMLSelectElement,
+  nSize: document.querySelector("#n-size") as HTMLInputElement,
+  symSelect: document.querySelector("#sym-select") as HTMLSelectElement,
+  heuristicSelect: document.querySelector("#heuristic-select") as HTMLSelectElement,
+  toroidalCheck: document.querySelector("#toroidal-check") as HTMLInputElement,
+  speedRange: document.querySelector("#speed-range") as HTMLInputElement,
+  speedVal: document.querySelector("#speed-val") as HTMLSpanElement,
+  restartBtn: document.querySelector("#restart-btn") as HTMLButtonElement,
+  status: document.querySelector("#status") as HTMLElement,
+  canvas: document.querySelector("canvas") as HTMLCanvasElement,
+};
+
+// initialization
+function initUI() {
+  // image selection (input)
+  Object.keys(IMAGES).forEach(key => {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.innerText = key;
+    ui.imgSelect.appendChild(opt);
   });
 
-  window.addEventListener("mouseup", () => {
-    isDragging = false;
+  // speed control
+  ui.speedRange.addEventListener("input", () => {
+    ui.speedVal.innerText = ui.speedRange.value;
   });
 
-  app.canvas.addEventListener("mousemove", (e) => {
-    if (!isDragging) return;
+  // restart generation
+  ui.restartBtn.addEventListener("click", () => {
+    runSimulation();
+  });
 
-    const dx = e.clientX - lastX;
-    const dy = e.clientY - lastY;
+  // panning control
+  let isDragging = false;
+  let lastX = 0, lastY = 0;
 
-    pan.x += dx;
-    pan.y += dy;
+  ui.canvas.addEventListener("mousedown", e => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+  window.addEventListener("mouseup", () => isDragging = false);
+  ui.canvas.addEventListener("mousemove", e => {
+    if (!isDragging || !gpuApp) return;
 
-    updatePanData(app, pan);
+    pan.x += e.clientX - lastX;
+    pan.y += e.clientY - lastY;
+
+    updatePanData(gpuApp, pan);
 
     lastX = e.clientX;
     lastY = e.clientY;
   });
 }
 
-async function main() {
-  // WEBGPU initalization
-  const canvas = document.querySelector<HTMLCanvasElement>("canvas");
-  assert(canvas !== null);
-  let gpuAppBase: GPUAppBase;
-  let tileset: Tileset;
-  let tileSize: number = TILE_SIZE;
-
-  if (OVERLAPPING_MODEL)
-    tileset = await createOverlappingTileset(input, TILE_SIZE, SYMMETRY_MODE);
-  else {
-    const { tileset: t, tileSize: s} = await createSimpleTiledTileset(simpleTiles, SIMPLE_TILESET_PATH);
-    tileset = t;
-    tileSize = s;
-  }
-
+async function initGPU() {
+  if (gpuBase) return gpuBase; // init once
+  
   try {
-    gpuAppBase = await initWebGPU(canvas, {
-      canvas: {
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT,
-      },
-      grid: {
-        width: GRID_WIDTH,
-        height: GRID_HEIGHT,
-      },
-      tileSize,
+    gpuBase = await initWebGPU(ui.canvas, {
+      canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+      grid: { width: GRID_WIDTH, height: GRID_HEIGHT },
+      tileSize: parseInt(ui.nSize.value),
       pan,
     });
-  } catch(e) {
-    const t = document.querySelector("#title") as HTMLElement;
-    t.innerHTML = "WebGPU is not supported on this browser.";
-    t.style.display = "block";
+    
+    // start render loop at initilization
+    const loop = () => {
+      if (gpuApp) render(gpuApp);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
 
+    return gpuBase;
+  } catch (e) {
+    console.error(e);
+    alert("WebGPU failed to initialize.");
+    return null;
+  }
+}
+
+async function runSimulation() {
+  currentCancelToken.cancelled = true; // stops previous call (previous call has ref to this obj)
+  currentCancelToken = { cancelled: false }; // new obj ref
+  const token = currentCancelToken;
+
+  ui.status.innerText = "Loading...";
+  
+  const overlapping = true; // @TODO allow simple tiled model
+  const imgKey = ui.imgSelect.value;
+  const symmetry = ui.symSelect.value as SymmetryMode;
+  const heuristic = ui.heuristicSelect.value as any;
+  const toroidal = ui.toroidalCheck.checked;
+  let tileSize = parseInt(ui.nSize.value);
+
+  const base = await initGPU();
+  if (!base) return;
+
+  let tileset;
+  try {
+    if (overlapping) {
+      tileset = await createOverlappingTileset(IMAGES[imgKey], tileSize, symmetry);
+    } else {
+      // @TODO simple model tileset selection
+      const { tileset: tset, tileSize: tsize } = await createSimpleTiledTileset(xmlCastle, SIMPLE_TILESET_PATH);
+      tileset = tset;
+      tileSize = tsize;
+      base.dimensions.tileSize = tileSize;
+    }
+  } catch (e) {
+    console.error(e);
+    ui.status.innerText = `Error loading tileset: ${e}`;
     return;
   }
 
-  // wave function setup
-  const wave = new Wave(GRID_WIDTH, GRID_HEIGHT, tileset, OVERLAPPING_MODEL, HEURISTIC, TOROIDAL_GENERATION);
+  if (token.cancelled) return;
 
-  const gpuAppPipeline = initRenderPipeline(gpuAppBase);
-  const gpuApp = initGPUBuffers(gpuAppPipeline, OVERLAPPING_MODEL);
+  // initialize wave
+  const wave = new Wave(GRID_WIDTH, GRID_HEIGHT, tileset, overlapping, heuristic, toroidal);
 
-  setupListeners(gpuApp);
+  const pipeline = initRenderPipeline(base);
+  gpuApp = initGPUBuffers(pipeline, overlapping);
+  
+  // reset pan
+  pan = { x: 0, y: 0 };
+  updatePanData(gpuApp, pan);
 
-  wave.collapse(async () => {
-    function timeout(ms: number) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+  ui.status.innerText = "Running...";
+
+  // generation
+  await wave.collapse(async () => {
+    if (token.cancelled) throw "CANCELLED";
+
+    updateTexture(gpuApp!, wave.getTexturePixels());
+
+    const delay = parseInt(ui.speedRange.value);
+    if (delay > 0) await new Promise(r => setTimeout(r, delay));
+  }).catch(e => {
+    if (e !== "CANCELLED") {
+      console.error(e);
+      ui.status.innerText = `Error: ${e}`;
     }
-
-    updateTexture(gpuApp, wave.getTexturePixels());
-    await timeout(1);
   });
 
-  setInterval(() => render(gpuApp), 16.6);
-  previewBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels), 4);
+  if (!token.cancelled) ui.status.innerText = "Finished";
 }
 
-main();
+initUI();
+setTimeout(runSimulation, 100);

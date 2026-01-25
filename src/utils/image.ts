@@ -27,12 +27,11 @@ export async function decodePNG(url: string): Promise<PngResponse> {
 }
 
 export function dataAt(png: PngResponse, y: number, x: number, ksize: number) {
-  const pad = (ksize - 1) / 2;
   const block = new PixelBlock(ksize);
 
-  for (let innerY = y - pad; innerY <= y + pad; ++innerY) {
-    for (let innerX = x - pad; innerX <= x + pad; ++innerX) {
-      const blockIdx = idx(innerY + pad - y, innerX + pad - x, ksize);
+  for (let innerY = y; innerY < y + ksize; ++innerY) {
+    for (let innerX = x; innerX < x + ksize; ++innerX) {
+      const blockIdx = idx(innerY - y, innerX - x, ksize);
       const imgIdx = idx(innerY, innerX, png.width) * 4;
 
       // only RGBA values for now

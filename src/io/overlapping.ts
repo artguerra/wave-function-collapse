@@ -19,16 +19,14 @@ async function extractPixelBlocks(
   ksize: number,
   symmetryMode: "ALL" | "MIRROR_X" | "MIRROR_Y" | "MIRROR_XY" | "NONE" = "ALL"
 ): Promise<PixelBlock[]> {
-  if (ksize % 2 == 0) throw Error("Kernel size must be odd");
-
   const png = await decodePNG(path);
-
-  const pad = (ksize - 1) / 2;
-
   const blocks: PixelBlock[] = [];
+  
+  const xmax = png.width - ksize;
+  const ymax = png.height - ksize;
 
-  for (let y = pad; y < png.height - pad; ++y) {
-    for (let x = pad; x < png.width - pad; ++x) {
+  for (let y = 0; y <= ymax; ++y) {
+    for (let x = 0; x <= xmax; ++x) {
       const block = dataAt(png, y, x, ksize);
 
       blocks.push(block);
@@ -38,7 +36,7 @@ async function extractPixelBlocks(
       }
 
       if (symmetryMode == "MIRROR_Y") {
-        blocks.push(mirrorBlockX(block));
+        blocks.push(mirrorBlockY(block));
       }
 
       if (symmetryMode == "MIRROR_XY") {
@@ -66,7 +64,6 @@ async function extractPixelBlocks(
   return blocks;
 }
 
-// `cols` is needed to gather adjecency information
 function createTileset(
   tileSize: number,
   rawTiles: PixelBlock[],
@@ -157,10 +154,10 @@ function compatible(tile: Tile, neighbor: Tile, dir: number): boolean {
 
   for (let y = startY; y < endY; y++) {
     for (let x = startX; x < endX; x++) {
-      const idxT = idx(y, x, ksize); // pixel idx for the tile
-      const idxN = idx(y + shiftY, x + shiftX, ksize); // pixel idx for neighbor
+      const tileIdx = idx(y, x, ksize);
+      const neighIdx = idx(y + shiftY, x + shiftX, ksize);
 
-      if (!rgbaEqual(tile.pixels.values[idxT], neighbor.pixels.values[idxN])) return false;
+      if (!rgbaEqual(tile.pixels.values[tileIdx], neighbor.pixels.values[neighIdx])) return false;
     }
   }
 
