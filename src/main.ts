@@ -20,16 +20,16 @@ const SIMPLE_TILESET_PATH = "../assets/tilesets/castle/";
 
 // global configurations
 const TILE_SIZE = 3;
-const GRID_WIDTH = 16;
-const GRID_HEIGHT = 16;
+const GRID_WIDTH = 24;
+const GRID_HEIGHT = 24;
 const CANVAS_WIDTH = 712;
 const CANVAS_HEIGHT = 712;
 
 // WFC parameters
-const SYMMETRY_MODE: SymmetryMode = "ALL";
+const OVERLAPPING_MODEL = true;
+const SYMMETRY_MODE: SymmetryMode = "NONE";
 const HEURISTIC: Wave["heuristic"] = "ENTROPY";
 const TOROIDAL_GENERATION = false;
-const OVERLAPPING_MODEL = false;
 
 // global UI control variables
 // @TODO define more sophisticated camera struct
@@ -116,7 +116,7 @@ async function main() {
     }
 
     updateTexture(gpuApp, wave.getTexturePixels());
-    await timeout(1000);
+    await timeout(1);
   });
 
   setInterval(() => render(gpuApp), 16.6);

@@ -96,7 +96,7 @@ export class Wave {
 
     if (this.heuristic == "ENTROPY") {
       let minEntropy = Number.MAX_VALUE;
-      let minIdx = 0;
+      let minIdx = -1;
 
       for (let i = 0; i < this.waveSize; ++i) {
         // check if overlapping block can be placed

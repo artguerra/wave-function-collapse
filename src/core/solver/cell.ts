@@ -74,7 +74,6 @@ export class Cell {
     this.collapsedState = tileIdx;
     this.entropy = 0;
 
-    console.log("collapsing to: " + tileIdx)
     this.currentMainColor = this.tileset.tiles[tileIdx].pixels.mainColor;
     this.currentAverageColor = this.tileset.tiles[tileIdx].pixels.averageColor;
   }
