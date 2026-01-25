@@ -1,18 +1,22 @@
 import { assert } from "@/utils";
-import { previewBlocks } from "./utils/image.ts";
+import { previewBlocks } from "@/utils/image.ts";
 
 import { createOverlappingTileset } from "@/io/overlapping";
-import { SimpleTilesetParser } from "./io/simple-tiled.ts";
+import { createSimpleTiledTileset } from "@/io/simple-tiled.ts";
 
 import type { SymmetryMode, Vec2 } from "@/core/types";
+import type { Tileset } from "@/core/tileset";
 import { Wave } from "@/core/solver/wave";
+
 import {
   type GPUAppBase, type GPUApp, initWebGPU, initRenderPipeline,
-  render, initGPUBuffers, updateCellData, updatePanData
+  render, initGPUBuffers, updateTexture, updatePanData
 } from "@/renderer";
 
 import input from "@assets/MagicOffice.png";
 import simpleTiles from "@assets/tilesets/castle/castle.xml?raw"
+
+const SIMPLE_TILESET_PATH = "../assets/tilesets/castle/";
 
 // global configurations
 const TILE_SIZE = 3;
@@ -23,9 +27,9 @@ const CANVAS_HEIGHT = 712;
 
 // WFC parameters
 const SYMMETRY_MODE: SymmetryMode = "ALL";
-const HEURISTIC: Wave["heuristic"] = "SCANLINE";
-const TOROIDAL_GENERATION = true;
-const OVERLAPPING_MODEL = true;
+const HEURISTIC: Wave["heuristic"] = "ENTROPY";
+const TOROIDAL_GENERATION = false;
+const OVERLAPPING_MODEL = false;
 
 // global UI control variables
 // @TODO define more sophisticated camera struct
@@ -51,8 +55,8 @@ function setupListeners(app: GPUApp) {
     const dx = e.clientX - lastX;
     const dy = e.clientY - lastY;
 
-    pan.x += dx / GRID_WIDTH;
-    pan.y += dy / GRID_HEIGHT;
+    pan.x += dx;
+    pan.y += dy;
 
     updatePanData(app, pan);
 
@@ -66,6 +70,16 @@ async function main() {
   const canvas = document.querySelector<HTMLCanvasElement>("canvas");
   assert(canvas !== null);
   let gpuAppBase: GPUAppBase;
+  let tileset: Tileset;
+  let tileSize: number = TILE_SIZE;
+
+  if (OVERLAPPING_MODEL)
+    tileset = await createOverlappingTileset(input, TILE_SIZE, SYMMETRY_MODE);
+  else {
+    const { tileset: t, tileSize: s} = await createSimpleTiledTileset(simpleTiles, SIMPLE_TILESET_PATH);
+    tileset = t;
+    tileSize = s;
+  }
 
   try {
     gpuAppBase = await initWebGPU(canvas, {
@@ -77,7 +91,7 @@ async function main() {
         width: GRID_WIDTH,
         height: GRID_HEIGHT,
       },
-      tileSize: TILE_SIZE,
+      tileSize,
       pan,
     });
   } catch(e) {
@@ -88,14 +102,11 @@ async function main() {
     return;
   }
 
-  // WFC setup
-  const tileset = await SimpleTilesetParser.load(simpleTiles, "../assets/tilesets/castle/");
-  // const tileset = await createOverlappingTileset(input, TILE_SIZE, SYMMETRY_MODE);
-  
-  const wave = new Wave(GRID_WIDTH, GRID_HEIGHT, tileset, HEURISTIC, TOROIDAL_GENERATION);
+  // wave function setup
+  const wave = new Wave(GRID_WIDTH, GRID_HEIGHT, tileset, OVERLAPPING_MODEL, HEURISTIC, TOROIDAL_GENERATION);
 
   const gpuAppPipeline = initRenderPipeline(gpuAppBase);
-  const gpuApp = initGPUBuffers(gpuAppPipeline);
+  const gpuApp = initGPUBuffers(gpuAppPipeline, OVERLAPPING_MODEL);
 
   setupListeners(gpuApp);
 
@@ -104,12 +115,12 @@ async function main() {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    updateCellData(gpuApp, wave.getCurrentColorsFlat());
-    await timeout(1);
+    updateTexture(gpuApp, wave.getTexturePixels());
+    await timeout(1000);
   });
 
   setInterval(() => render(gpuApp), 16.6);
-  previewBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels));
+  previewBlocks(document.querySelector("body")!, tileset.tiles.map(t => t.pixels), 4);
 }
 
 main();

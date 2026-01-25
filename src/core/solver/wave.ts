@@ -6,6 +6,7 @@ import { idx, DX, DY, OPPOSITE } from "@/utils/grid.ts";
 type Heuristic = "SCANLINE" | "ENTROPY";
 
 export class Wave {
+  overlapping: boolean;
   heuristic: Heuristic;
   toroidal: boolean;
 
@@ -25,9 +26,11 @@ export class Wave {
 
   constructor(
     width: number, height: number,
-    tileset: Tileset, heuristic: Heuristic = "ENTROPY",
+    tileset: Tileset, overlapping: boolean,
+    heuristic: Heuristic = "ENTROPY",
     toroidal: boolean = false
   ) {
+    this.overlapping = overlapping;
     this.heuristic = heuristic;
     this.toroidal = toroidal;
 
@@ -82,7 +85,7 @@ export class Wave {
     if (this.heuristic == "SCANLINE") {
       for (let i = 0; i < this.waveSize; ++i) {
         // check if overlapping block can be placed
-        if (!this.toroidal) {
+        if (this.overlapping && !this.toroidal) {
           if (this.wave[i].pos.x + ksize > this.width || this.wave[i].pos.y + ksize > this.height)
             continue;
         }
@@ -97,7 +100,7 @@ export class Wave {
 
       for (let i = 0; i < this.waveSize; ++i) {
         // check if overlapping block can be placed
-        if (!this.toroidal) {
+        if (this.overlapping && !this.toroidal) {
           if (this.wave[i].pos.x + ksize > this.width || this.wave[i].pos.y + ksize > this.height)
             continue;
         }
@@ -122,6 +125,8 @@ export class Wave {
   observe(cellIdx: number): boolean {
     const cell = this.wave[cellIdx];
     const chosenTile = cell.chooseRandomTile();
+
+    if (chosenTile == -1) return false;
 
     for (const tileIdx of cell.possibleStates) {
       if (tileIdx != chosenTile) this.ban(cellIdx, tileIdx);
@@ -197,17 +202,60 @@ export class Wave {
     }
   }
 
-  getCurrentColorsFlat(): Float32Array {
-    const data = new Float32Array(this.waveSize * 4);
+  getTexturePixels(): Uint8ClampedArray {
+    const ksize = this.tileset.tileSize;
+    
+    const scale = this.overlapping ? 1 : ksize;
+    const outWidth = this.width * scale;
+    const outHeight = this.height * scale;
 
-    let idx = 0;
-    for (const cell of this.wave) {
-      const color = cell.currentColor;
+    const data = new Uint8ClampedArray(outWidth * outHeight * 4);
 
-      data[idx++] = color[0] / 255;
-      data[idx++] = color[1] / 255;
-      data[idx++] = color[2] / 255;
-      data[idx++] = color[3] / 255;
+    for (let i = 0; i < this.waveSize; i++) {
+      const cell = this.wave[i];
+      
+      const startX = cell.pos.x * scale;
+      const startY = cell.pos.y * scale;
+
+      if (this.overlapping) {
+        const idx = (startY * outWidth + startX) * 4;
+        const color = cell.currentMainColor;
+
+        data[idx] = color[0];
+        data[idx + 1] = color[1];
+        data[idx + 2] = color[2];
+        data[idx + 3] = color[3];
+      } 
+      else {
+        // simple tiled model
+        // if collapsed, draw the actual detailed tile pixels
+        // if not collapsed, draw the average color of remaining options
+        const pixels = cell.isCollapsed 
+           ? this.tileset.tiles[cell.collapsedState!].pixels.values
+           : null; 
+        
+        const fallbackColor = cell.currentAverageColor;
+
+        for (let y = 0; y < ksize; y++) {
+          for (let x = 0; x < ksize; x++) {
+            const texIdx = idx(startY + y, startX + x, outWidth) *  4;
+
+            if (pixels) {
+               const localIdx = idx(y, x, ksize);
+               data[texIdx + 0] = pixels[localIdx][0];
+               data[texIdx + 1] = pixels[localIdx][1];
+               data[texIdx + 2] = pixels[localIdx][2];
+               data[texIdx + 3] = pixels[localIdx][3];
+            } else {
+               // Draw solid average color
+               data[texIdx + 0] = fallbackColor[0];
+               data[texIdx + 1] = fallbackColor[1];
+               data[texIdx + 2] = fallbackColor[2];
+               data[texIdx + 3] = 255;
+            }
+          }
+        }
+      }
     }
 
     return data;

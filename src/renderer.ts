@@ -28,7 +28,8 @@ export interface GPUAppPipeline extends GPUAppBase {
 export interface GPUApp extends GPUAppPipeline {
   bindGroup: GPUBindGroup;
   uniformBuffer: GPUBuffer;
-  cellDataBuffer: GPUBuffer;
+  outputTexture: GPUTexture;
+  outputTextureDimensions: Dimensions;
 }
 
 export async function initWebGPU(canvas: HTMLCanvasElement, dimensions: AppDimensions): Promise<GPUAppBase> {
@@ -70,7 +71,18 @@ export function initRenderPipeline(app: GPUAppBase): GPUAppPipeline {
       {
         binding: 1,
         visibility: GPUShaderStage.FRAGMENT,
-        buffer: { type: "read-only-storage" },
+        texture: {
+          sampleType: "float",
+          viewDimension: "2d",
+          multisampled: false,
+        },
+      },
+      {
+        binding: 2,
+        visibility: GPUShaderStage.FRAGMENT,
+        sampler: {
+          type: "filtering",
+        }
       }
     ]
   });
@@ -94,16 +106,10 @@ export function initRenderPipeline(app: GPUAppBase): GPUAppPipeline {
   return { ...app, shaderModule, bindGroupLayout, pipeline };
 }
 
-export function initGPUBuffers(app: GPUAppPipeline): GPUApp {
+export function initGPUBuffers(app: GPUAppPipeline, overlapping: boolean): GPUApp {
   const configData = new Uint32Array([
-    app.dimensions.grid.width,
-    app.dimensions.grid.height,
-    app.dimensions.canvas.width,
-    app.dimensions.canvas.height,
-    app.dimensions.tileSize,
-    0,
-    app.dimensions.pan.x,
-    app.dimensions.pan.y,
+    app.dimensions.canvas.width, app.dimensions.canvas.height,
+    app.dimensions.pan.x, app.dimensions.pan.y,
   ]);
 
   const uniformBuffer = app.device.createBuffer({
@@ -114,43 +120,53 @@ export function initGPUBuffers(app: GPUAppPipeline): GPUApp {
 
   app.device.queue.writeBuffer(uniformBuffer, 0, configData);
 
-  const cellDataBuffer = app.device.createBuffer({
-    label: "cell data storage uniform buffer",
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    size: (app.dimensions.grid.width * app.dimensions.grid.height) // for each tile (x, y)
-      // * (app.dimensions.tileSize * app.dimensions.tileSize) // pixels for each tile
-      * 4 * 4, // RGBA and 4 bytes each
+  const textureDimensions: Dimensions = {
+    width: app.dimensions.grid.width * (overlapping ? 1 : app.dimensions.tileSize),
+    height: app.dimensions.grid.height * (overlapping ? 1 : app.dimensions.tileSize),
+  };
+
+  const outputTexture = app.device.createTexture({
+    label: "cell color texture",
+    size: [textureDimensions.width, textureDimensions.height],
+    format: "rgba8unorm",
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
   });
 
+  const sampler = app.device.createSampler({
+    magFilter: "nearest",
+    minFilter: "nearest",
+    addressModeU: "repeat",
+    addressModeV: "repeat",
+  });
 
   const bindGroup = app.device.createBindGroup({
     layout: app.bindGroupLayout,
     entries: [
-      {
-        binding: 0,
-        resource: { buffer: uniformBuffer },
-      },
-      {
-        binding: 1,
-        resource: { buffer: cellDataBuffer },
-      }
+      { binding: 0, resource: { buffer: uniformBuffer } },
+      { binding: 1, resource: outputTexture.createView() },
+      { binding: 2, resource: sampler },
     ],
   });
 
-  return { ...app, bindGroup, uniformBuffer, cellDataBuffer };
+  return { ...app, bindGroup, uniformBuffer, outputTexture, outputTextureDimensions: textureDimensions };
 }
 
-export function updateCellData(app: GPUApp, data: Float32Array | Array<number>): void {
-  const arr = new Float32Array(data);
+export function updateTexture(app: GPUApp, data: Uint8ClampedArray): void {
+  const { width, height } = app.outputTextureDimensions;
 
-  if (arr.byteLength != app.cellDataBuffer.size)
-    throw Error("Tried to update cell data with invalid size.")
+  if (data.byteLength !== width * height * 4)
+      throw Error("Tried to update texture with invalid size.")
 
-  app.device.queue.writeBuffer(app.cellDataBuffer, 0, arr);
+  app.device.queue.writeTexture(
+    { texture: app.outputTexture },
+    data as GPUAllowSharedBufferSource,
+    { bytesPerRow: width * 4 },
+    { width, height },
+  );
 }
 
 export function updatePanData(app: GPUApp, pan: Vec2) {
-  app.device.queue.writeBuffer(app.uniformBuffer, 24, new Float32Array([pan.x, pan.y]));
+  app.device.queue.writeBuffer(app.uniformBuffer, 8, new Float32Array([pan.x, pan.y]));
 }
 
 export function render(app: GPUApp): void {

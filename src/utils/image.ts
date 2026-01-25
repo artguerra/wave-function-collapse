@@ -72,6 +72,7 @@ export function pngToPixelBlock(png: PngResponse): PixelBlock {
   return block;
 }
 
+// mirror horizontally
 export function mirrorBlockX(block: PixelBlock): PixelBlock {
   const ksize = block.ksize;
   const mirrored = new PixelBlock(ksize);
@@ -84,6 +85,7 @@ export function mirrorBlockX(block: PixelBlock): PixelBlock {
   return mirrored;
 }
 
+// mirror vertically
 export function mirrorBlockY(block: PixelBlock): PixelBlock {
   const ksize = block.ksize;
   const mirrored = new PixelBlock(ksize);
@@ -96,6 +98,7 @@ export function mirrorBlockY(block: PixelBlock): PixelBlock {
   return mirrored;
 }
 
+// rotate 90 degrees counterclockwise
 export function rotateBlock90(block: PixelBlock): PixelBlock {
   const ksize = block.ksize;
   const rotated = new PixelBlock(ksize);

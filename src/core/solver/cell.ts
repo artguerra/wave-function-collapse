@@ -12,8 +12,10 @@ export class Cell {
   isCollapsed: boolean;
   collapsedState: number | undefined; // final state (if collapsed)
 
-  colorSum: RGBA;
-  currentColor: RGBA;
+  mainColorSum: RGBA; // for the overlapping model visualisation
+  averageColorSum: RGBA; // for the simple tiled model visualisation
+  currentMainColor: RGBA;
+  currentAverageColor: RGBA;
 
   // entropy related values
   sumWeights: number;
@@ -26,8 +28,10 @@ export class Cell {
     this.possibleStates = new Bitset(tileset.size, true);
     this.remainingStates = tileset.size;
 
-    this.colorSum = [...tileset.totalColorSum];
-    this.currentColor = [0, 0, 0, 0];
+    this.mainColorSum = [...tileset.mainColorSum];
+    this.averageColorSum = [...tileset.averageColorSum];
+    this.currentMainColor = [0, 0, 0, 0];
+    this.currentAverageColor = [0, 0, 0, 0];
     this.updateAverageColor();
 
     this.sumWeights = weightSum;
@@ -43,14 +47,12 @@ export class Cell {
     const currentFrequencies: number[] = [];
     let sumFrequencies = 0;
 
-    let lastValidIdx = 0;
     for (const [idx, possible] of this.possibleStates.bits()) {
       const freq = possible ? this.tileset.frequencies[idx] : 0;
 
       currentFrequencies.push(freq);
       sumFrequencies += freq;
 
-      if (possible) lastValidIdx = idx;
     }
 
     if (sumFrequencies == 0) return -1;
@@ -61,11 +63,10 @@ export class Cell {
     for (let i = 0; i < currentFrequencies.length; ++i) {
       currentSum += currentFrequencies[i];
 
-
       if (currentSum >= threshold) return i;
     }
 
-    return lastValidIdx;
+    return -1;
   }
 
   collapseTo(tileIdx: number): void {
@@ -73,7 +74,9 @@ export class Cell {
     this.collapsedState = tileIdx;
     this.entropy = 0;
 
-    this.currentColor = this.tileset.tiles[tileIdx].pixels.mainColor;
+    console.log("collapsing to: " + tileIdx)
+    this.currentMainColor = this.tileset.tiles[tileIdx].pixels.mainColor;
+    this.currentAverageColor = this.tileset.tiles[tileIdx].pixels.averageColor;
   }
 
   // disallow tile in this cell (updates states)
@@ -88,8 +91,10 @@ export class Cell {
     this.sumWeightLogWeights -= Math.log(freq) * freq;
     this.entropy = Math.log(this.sumWeights) - this.sumWeightLogWeights / this.sumWeights;
 
-    for (let i = 0; i < 4; ++i)
-      this.colorSum[i] -= this.tileset.tiles[tileIdx].pixels.mainColor[i];
+    for (let i = 0; i < 4; ++i) {
+      this.mainColorSum[i] -= this.tileset.tiles[tileIdx].pixels.mainColor[i];
+      this.averageColorSum[i] -= this.tileset.tiles[tileIdx].pixels.averageColor[i];
+    }
 
     this.updateAverageColor();
 
@@ -98,14 +103,22 @@ export class Cell {
 
   updateAverageColor(): void {
     if (this.remainingStates > 0) {
-      this.currentColor = [
-        this.colorSum[0] / this.remainingStates,
-        this.colorSum[1] / this.remainingStates,
-        this.colorSum[2] / this.remainingStates,
-        this.colorSum[3] / this.remainingStates,
+      this.currentMainColor = [
+        this.mainColorSum[0] / this.remainingStates,
+        this.mainColorSum[1] / this.remainingStates,
+        this.mainColorSum[2] / this.remainingStates,
+        this.mainColorSum[3] / this.remainingStates,
+      ];
+
+      this.currentAverageColor = [
+        this.averageColorSum[0] / this.remainingStates,
+        this.averageColorSum[1] / this.remainingStates,
+        this.averageColorSum[2] / this.remainingStates,
+        this.averageColorSum[3] / this.remainingStates,
       ];
     } else {
-        this.currentColor = [0, 0, 0, 255]; // contradiction: black
+        this.currentMainColor = [0, 0, 0, 255]; // contradiction: black
+        this.currentAverageColor = [0, 0, 0, 255];
     }
   }
 }

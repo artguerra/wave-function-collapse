@@ -13,7 +13,9 @@ export class Tileset {
   ];
   readonly frequencies: Float32Array;
   readonly averageColor: RGBA;
-  readonly totalColorSum: RGBA; // for progressive color updates
+
+  readonly mainColorSum: RGBA; // for progressive color updates (overlapping)
+  readonly averageColorSum: RGBA; // for simple tiled model
 
   constructor(
     tileSize: number,
@@ -35,10 +37,12 @@ export class Tileset {
     this.averageColor = avgColorSum.map(s => s / tiles.length) as RGBA;
 
     // calculate total sum of tiles main colors
-    this.totalColorSum = [0, 0, 0, 0];
+    this.mainColorSum = [0, 0, 0, 0];
+    this.averageColorSum = [0, 0, 0, 0];
     for(const tile of tiles) {
       for(let i = 0; i < 4; ++i) {
-        this.totalColorSum[i] += tile.pixels.mainColor[i];
+        this.mainColorSum[i] += tile.pixels.mainColor[i];
+        this.averageColorSum[i] += tile.pixels.averageColor[i];
       }
     }
   }
