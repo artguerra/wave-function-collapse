@@ -1,5 +1,7 @@
 import { createOverlappingTileset } from "@/io/overlapping";
 import { createSimpleTiledTileset } from "@/io/simple-tiled.ts";
+import { assert } from "@/utils";
+import { previewBlocks } from "@/utils/image";
 import type { SymmetryMode, Vec2 } from "@/core/types";
 import { Wave } from "@/core/solver/wave";
 import {
@@ -14,6 +16,7 @@ import imgWall from "@assets/wall.png";
 import imgFlowers from "@assets/flowers.png";
 import imgPlatformer from "@assets/platformer.png";
 import xmlCastle from "@assets/tilesets/castle/castle.xml?raw"  ;
+import { Tileset } from "./core/tileset";
 
 const SIMPLE_TILESET_PATH = "../assets/tilesets/castle/";
 
@@ -29,8 +32,8 @@ const IMAGES: Record<string, string> = {
 // configuration
 const CANVAS_WIDTH = 712;
 const CANVAS_HEIGHT = 712;
-const GRID_WIDTH = 40;
-const GRID_HEIGHT = 40;
+const GRID_WIDTH = 16;
+const GRID_HEIGHT = 16;
 
 let currentCancelToken = { cancelled: false };
 let gpuApp: GPUApp | null = null;
@@ -49,7 +52,20 @@ const ui = {
   speedVal: document.querySelector("#speed-val") as HTMLSpanElement,
   restartBtn: document.querySelector("#restart-btn") as HTMLButtonElement,
   status: document.querySelector("#status") as HTMLElement,
-  canvas: document.querySelector("canvas") as HTMLCanvasElement,
+  canvas: document.querySelector("#main-canvas") as HTMLCanvasElement,
+  previewTilesCheck: document.querySelector("#preview-tiles-check") as HTMLInputElement,
+  previewCanvasWrapper: document.querySelector("#preview-canvas-wrapper") as HTMLDivElement,
+};
+
+// WFC global references
+interface WFCState {
+  tileset: Tileset | null;
+  wave: Wave | null;
+};
+
+const wfc: WFCState = {
+  tileset: null,
+  wave: null,
 };
 
 // initialization
@@ -70,6 +86,22 @@ function initUI() {
   // restart generation
   ui.restartBtn.addEventListener("click", () => {
     runSimulation();
+  });
+
+  ui.previewTilesCheck.addEventListener("input", () => {
+    const preview = ui.previewTilesCheck.checked;
+    if (preview) {
+      ui.previewCanvasWrapper.style.display = "flex";
+      ui.previewCanvasWrapper.innerHTML = "";
+
+      assert(wfc.tileset != null, "Tileset is not initialized");
+
+      previewBlocks(
+        ui.previewCanvasWrapper,
+        wfc.tileset.tiles.map(t => t.pixels),
+        Math.floor(Math.sqrt(wfc.tileset.size))
+      );
+    } else ui.previewCanvasWrapper.style.display = "none";
   });
 
   // panning control
@@ -101,7 +133,7 @@ async function initGPU() {
       tileSize: parseInt(ui.nSize.value),
       pan,
     });
-    
+
     // start render loop at initilization
     const loop = () => {
       if (gpuApp) render(gpuApp);
@@ -124,26 +156,25 @@ async function runSimulation() {
 
   ui.status.innerText = "Loading...";
   
-  const overlapping = true; // @TODO allow simple tiled model
+  const overlapping = ui.modelSelect.value == "OVERLAPPING";
   const imgKey = ui.imgSelect.value;
   const symmetry = ui.symSelect.value as SymmetryMode;
   const heuristic = ui.heuristicSelect.value as any;
   const toroidal = ui.toroidalCheck.checked;
-  let tileSize = parseInt(ui.nSize.value);
+  const tileSize = parseInt(ui.nSize.value);
 
   const base = await initGPU();
   if (!base) return;
 
-  let tileset;
   try {
     if (overlapping) {
-      tileset = await createOverlappingTileset(IMAGES[imgKey], tileSize, symmetry);
+      wfc.tileset = await createOverlappingTileset(IMAGES[imgKey], tileSize, symmetry);
     } else {
       // @TODO simple model tileset selection
-      const { tileset: tset, tileSize: tsize } = await createSimpleTiledTileset(xmlCastle, SIMPLE_TILESET_PATH);
-      tileset = tset;
-      tileSize = tsize;
-      base.dimensions.tileSize = tileSize;
+      const res = await createSimpleTiledTileset(xmlCastle, SIMPLE_TILESET_PATH);
+
+      wfc.tileset = res.tileset;
+      base.dimensions.tileSize = res.tileset.tileSize;
     }
   } catch (e) {
     console.error(e);
@@ -154,7 +185,7 @@ async function runSimulation() {
   if (token.cancelled) return;
 
   // initialize wave
-  const wave = new Wave(GRID_WIDTH, GRID_HEIGHT, tileset, overlapping, heuristic, toroidal);
+  wfc.wave = new Wave(GRID_WIDTH, GRID_HEIGHT, wfc.tileset, overlapping, heuristic, toroidal);
 
   const pipeline = initRenderPipeline(base);
   gpuApp = initGPUBuffers(pipeline, overlapping);
@@ -166,10 +197,12 @@ async function runSimulation() {
   ui.status.innerText = "Running...";
 
   // generation
-  await wave.collapse(async () => {
+  await wfc.wave.collapse(async () => {
     if (token.cancelled) throw "CANCELLED";
 
-    updateTexture(gpuApp!, wave.getTexturePixels());
+
+    assert(wfc.wave != null, "Wave is null.");
+    updateTexture(gpuApp!, wfc.wave.getTexturePixels());
 
     const delay = parseInt(ui.speedRange.value);
     if (delay > 0) await new Promise(r => setTimeout(r, delay));

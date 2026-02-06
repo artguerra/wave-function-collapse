@@ -62,7 +62,7 @@
       }
       button:hover { background-color: #0062a3; }
 
-      #canvas-wrapper {
+      .canvas-wrapper {
         flex-grow: 1;
         display: flex;
         justify-content: center;
@@ -104,7 +104,7 @@
             <select id="img-select"></select>
           </label>
           <label style="margin-top:10px">Model
-            <select id="model-select" disabled>
+            <select id="model-select">
               <option value="OVERLAPPING">Overlapping</option>
               <option value="SIMPLE">Simple Tiled</option>
             </select>
@@ -134,6 +134,13 @@
         </div>
 
         <div>
+          <h2>Visualization</h2>
+          <label>
+            Preview tiles <input type="checkbox" id="preview-tiles-check">
+          </label>
+        </div>
+
+        <div>
           <h2>Playback</h2>
           <label>Speed (Delay: <span id="speed-val">1</span>ms)</label>
           <input type="range" id="speed-range" min="1" max="500" value="1">
@@ -142,10 +149,12 @@
         </div>
       </div>
 
-      <div id="canvas-wrapper">
-        <canvas></canvas>
+      <div class="canvas-wrapper">
+        <canvas id="main-canvas"></canvas>
         <div id="status">Ready</div>
       </div>
+
+      <div id="preview-canvas-wrapper" class="canvas-wrapper"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
