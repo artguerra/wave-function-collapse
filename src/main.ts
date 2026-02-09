@@ -1,5 +1,6 @@
 import { createOverlappingTileset } from "@/io/overlapping";
 import { createStmTileset } from "@/io/stm";
+import { idx } from "@/utils/grid";
 import { previewBlocks } from "@/utils/image";
 import type { SymmetryMode, Vec2 } from "@/core/types";
 import { Wave } from "@/core/solver/wave";
@@ -17,7 +18,7 @@ import imgFlowers from "@assets/flowers.png";
 import imgPlatformer from "@assets/platformer.png";
 import tilesetCastle from "@assets/tilesets/castle/castle.xml?raw";
 import tilesetCircuit from "@assets/tilesets/circuit/circuit.xml?raw";
-import { idx } from "./utils/grid";
+import tilesetSummer from "@assets/tilesets/summer/summer.xml?raw";
 
 const BASE_TILESET_PATH = "assets/tilesets";
 
@@ -30,9 +31,10 @@ const IMAGES_OVERLAPPING: Record<string, string> = {
   "Platformer": imgPlatformer,
 };
 
-const TILESETS_STM: Record<string, { definition: string, dirPath: string }> = {
-  "Castle": { definition: tilesetCastle, dirPath: `${BASE_TILESET_PATH}/castle/` },
-  "Circuit": { definition: tilesetCircuit, dirPath: `${BASE_TILESET_PATH}/circuit/` },
+const TILESETS_STM: Record<string, { definition: string, dirPath: string, genSym: boolean }> = {
+  "Castle": { definition: tilesetCastle, dirPath: `${BASE_TILESET_PATH}/castle`, genSym: true },
+  "Circuit": { definition: tilesetCircuit, dirPath: `${BASE_TILESET_PATH}/circuit`, genSym: true },
+  "Summer": { definition: tilesetSummer, dirPath: `${BASE_TILESET_PATH}/summer`, genSym: false },
 }
 
 // configuration
@@ -326,7 +328,7 @@ async function loadTileset() {
       wfc.tileset = await createOverlappingTileset(IMAGES_OVERLAPPING[imgKey], tileSize, symmetry);
     } else {
       const stm = TILESETS_STM[imgKey];
-      const res = await createStmTileset(stm.definition, stm.dirPath);
+      const res = await createStmTileset(stm.definition, stm.dirPath, stm.genSym);
 
       wfc.tileset = res.tileset;
     }
@@ -347,31 +349,12 @@ async function runSimulation() {
   ui.status.innerText = "Loading...";
   
   const overlapping = ui.modelSelect.value == "OVERLAPPING";
-  const imgKey = ui.imgSelect.value;
   const outputSize = parseInt(ui.outputSize.value);
-  const symmetry = ui.symSelect.value as SymmetryMode;
   const heuristic = ui.heuristicSelect.value as any;
   const toroidal = ui.toroidalCheck.checked;
-  const tileSize = parseInt(ui.nSize.value);
 
   const base = await initGPU();
   if (!base) return;
-
-  try {
-    if (overlapping) {
-      wfc.tileset = await createOverlappingTileset(IMAGES_OVERLAPPING[imgKey], tileSize, symmetry);
-    } else {
-      const stm = TILESETS_STM[imgKey];
-      const res = await createStmTileset(stm.definition, stm.dirPath);
-
-      wfc.tileset = res.tileset;
-      base.dimensions.tileSize = res.tileset.tileSize;
-    }
-  } catch (e) {
-    console.error(e);
-    ui.status.innerText = `Error loading tileset: ${e}`;
-    return;
-  }
 
   if (wfc.tilesetNeedsReload) {
     await loadTileset();

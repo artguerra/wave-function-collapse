@@ -28,6 +28,7 @@ const CARDINALITY: Record<string, number> = {
 
 export async function createStmTileset(
   xml: string, tilesDir: string,
+  generateSymmetries: boolean = true,
   inferNeighborhood: boolean = false,
   inferredNeighborhoodWidth: number = 1,
   inferrenceTolerance: number = 40
@@ -54,19 +55,32 @@ export async function createStmTileset(
     const cardinality = CARDINALITY[sym] || 1;
     tileNameMap.set(name, { firstIdx: tiles.length, sym });
     
-    const png = await decodePNG(`${tilesDir}${name}.png`);
-    if (tileSize == -1) tileSize = png.width;
-    else assert(tileSize == png.width, "All the tiles should have the same size.");
-    
-    const pixels = pngToPixelBlock(png);
+    if (generateSymmetries) {
+      const png = await decodePNG(`${tilesDir}/${name}.png`);
+      if (tileSize == -1) tileSize = png.width;
+      else assert(tileSize == png.width, "All the tiles should have the same size.");
+      
+      const pixels = pngToPixelBlock(png);
 
-    // add symmetries
-    let rotated = pixels;
-    for (let i = 0; i < cardinality; ++i) {
-      tiles.push({ id: tiles.length, pixels: rotated });
-      frequencies.push(weight);
+      // add symmetries
+      let rotated = pixels;
+      for (let i = 0; i < cardinality; ++i) {
+        tiles.push({ id: tiles.length, pixels: rotated });
+        frequencies.push(weight);
 
-      rotated = rotateBlock90(rotated);
+        rotated = rotateBlock90(rotated);
+      }
+    } else {
+      for (let i = 0; i < cardinality; ++i) {
+        const png = await decodePNG(`${tilesDir}/${name} ${i}.png`);
+
+        if (tileSize == -1) tileSize = png.width;
+        else assert(tileSize == png.width, "All the tiles should have the same size.");
+
+
+        tiles.push({ id: tiles.length, pixels: pngToPixelBlock(png) });
+        frequencies.push(weight);
+      }
     }
   }
 
