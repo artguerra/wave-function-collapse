@@ -106,7 +106,7 @@ export function initRenderPipeline(app: GPUAppBase): GPUAppPipeline {
   return { ...app, shaderModule, bindGroupLayout, pipeline };
 }
 
-export function initGPUBuffers(app: GPUAppPipeline, overlapping: boolean): GPUApp {
+export function initGPUBuffers(app: GPUAppPipeline, unitTile: boolean): GPUApp {
   const configData = new Uint32Array([
     app.dimensions.canvas.width, app.dimensions.canvas.height,
     app.dimensions.pan.x, app.dimensions.pan.y,
@@ -121,8 +121,8 @@ export function initGPUBuffers(app: GPUAppPipeline, overlapping: boolean): GPUAp
   app.device.queue.writeBuffer(uniformBuffer, 0, configData);
 
   const textureDimensions: Dimensions = {
-    width: app.dimensions.grid.width * (overlapping ? 1 : app.dimensions.tileSize),
-    height: app.dimensions.grid.height * (overlapping ? 1 : app.dimensions.tileSize),
+    width: app.dimensions.grid.width * (unitTile ? 1 : app.dimensions.tileSize),
+    height: app.dimensions.grid.height * (unitTile ? 1 : app.dimensions.tileSize),
   };
 
   const outputTexture = app.device.createTexture({

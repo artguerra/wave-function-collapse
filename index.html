@@ -70,9 +70,21 @@
         font-size: 1.1rem;
         font-weight: bold;
         margin-top: 20px;
-        transition: background 0.2s;
+        transition: background 0.5s;
       }
       button:hover { background-color: #0062a3; }
+
+      button.secondary-btn {
+        background-color: #252526;
+        color: #007acc;
+        border: 2px solid #007acc;
+      }
+
+      button.secondary-btn:active {
+        background-color: #007acc;
+        color: white;
+        border: none;
+      }
 
       .canvas-wrapper {
         display: flex;
@@ -172,6 +184,14 @@
           
           <button id="restart-btn">RESTART GENERATION</button>
         </div>
+
+        <div>
+          <h2>Density editing</h2>
+          <label for="density-brush">Brush size:</label>
+          <input type="range" id="density-brush" min="1" max="25" value="1">
+          <button id="density-edit-btn">EDIT DENSITY MAP</button>
+          <button id="reset-density-btn" class="secondary-btn">RESET DENSITY</button>
+        </div>
       </div>
 
       <div id="main-canvas-wrapper" class="canvas-wrapper">
@@ -180,8 +200,10 @@
       </div>
 
       <div id="preview-section" style="display: none;">
-        <h2>Extracted tiles:</h2>
-        <div id="preview-canvas-wrapper" class="canvas-wrapper"></div>
+        <h2></h2>
+        <div class="canvas-wrapper">
+          <canvas id="preview-canvas" class="canvas-wrapper"></canvas>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

@@ -111,11 +111,12 @@ export function rotateBlock90(block: PixelBlock): PixelBlock {
 }
 
 export function previewBlocks(
-  target: HTMLElement,
+  canvas: HTMLCanvasElement,
   blocks: PixelData[],
   cols: number = 16,
   scale = 64,
   gap = 2,
+  selectedIndices?: Set<number>,
 ) {
   if (blocks.length === 0) return;
 
@@ -126,7 +127,6 @@ export function previewBlocks(
   const width = cols * tileDrawSize + (cols - 1) * gap;
   const height = rows * tileDrawSize + (rows - 1) * gap;
 
-  const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
 
@@ -163,8 +163,14 @@ export function previewBlocks(
       tileDrawSize,
       tileDrawSize,
     );
-  }
 
-  target.innerHTML = "";
-  target.appendChild(canvas);
+    if (selectedIndices && selectedIndices.has(i)) {
+      ctx.strokeStyle = "#f13724";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(dx + 1.5, dy + 1.5, tileDrawSize - 3, tileDrawSize - 3);
+      
+      ctx.fillStyle = "rgba(255, 99, 71, 0.2)";
+      ctx.fillRect(dx, dy, tileDrawSize, tileDrawSize);
+    }
+  }
 }
