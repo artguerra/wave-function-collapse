@@ -89,25 +89,6 @@ const wfc: State = {
 };
 
 function initUI() {
-  // image selection (input)
-  const setInputOptions = () => {
-    const overlapping = ui.modelSelect.value == "OVERLAPPING";
-    ui.imgSelect.innerHTML = "";
-
-    Object.keys(overlapping ? IMAGES_OVERLAPPING : TILESETS_STM).forEach(key => {
-      const opt = document.createElement("option");
-      opt.value = key;
-      opt.innerText = key;
-      ui.imgSelect.appendChild(opt);
-    });
-
-    ui.nSize.disabled = !overlapping;
-    ui.symSelect.disabled = !overlapping;
-  };
-
-  setInputOptions();
-  ui.modelSelect.addEventListener("input", setInputOptions);
-
   // speed control
   ui.speedRange.addEventListener("input", () => {
     ui.speedVal.innerText = ui.speedRange.value;
@@ -175,7 +156,7 @@ function initUI() {
   ui.resetDensityBtn.addEventListener("click", resetDensity);
 
   // resets to be done when image changes
-  ui.imgSelect.addEventListener("input", () => {
+  const resetTileset = () => {
     wfc.tilesetNeedsReload = true;
 
     resetDensity();
@@ -184,7 +165,31 @@ function initUI() {
     if (wfc.mode == "running") runSimulation();
     else
       loadTileset().then(() => { wfc.tilesetNeedsReload = false; });
+  };
+  ui.imgSelect.addEventListener("input", resetTileset);
+
+  // model selection
+  const setInputOptions = () => {
+    const overlapping = ui.modelSelect.value == "OVERLAPPING";
+    ui.imgSelect.innerHTML = "";
+
+    Object.keys(overlapping ? IMAGES_OVERLAPPING : TILESETS_STM).forEach(key => {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.innerText = key;
+      ui.imgSelect.appendChild(opt);
+    });
+
+    ui.nSize.disabled = !overlapping;
+    ui.symSelect.disabled = !overlapping;
+  };
+
+  setInputOptions();
+  ui.modelSelect.addEventListener("input", () => {
+    setInputOptions();
+    resetTileset();
   });
+
 
   // mouse events
   ui.previewCanvas.addEventListener("mousedown", (e) => {
