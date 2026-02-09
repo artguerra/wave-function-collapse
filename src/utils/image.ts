@@ -114,7 +114,7 @@ export function previewBlocks(
   target: HTMLElement,
   blocks: PixelData[],
   cols: number = 16,
-  scale = 16,
+  scale = 64,
   gap = 2,
 ) {
   if (blocks.length === 0) return;
@@ -122,13 +122,14 @@ export function previewBlocks(
   const size = Math.sqrt(blocks[0].values.length);
   const rows = Math.ceil(blocks.length / cols);
 
-  const tileDrawSize = size * scale;
+  const tileDrawSize = scale;
   const width = cols * tileDrawSize + (cols - 1) * gap;
   const height = rows * tileDrawSize + (rows - 1) * gap;
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
+
   const ctx = canvas.getContext("2d")!;
   ctx.imageSmoothingEnabled = false;
 
@@ -164,5 +165,6 @@ export function previewBlocks(
     );
   }
 
+  target.innerHTML = "";
   target.appendChild(canvas);
 }

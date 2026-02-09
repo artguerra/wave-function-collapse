@@ -34,10 +34,15 @@
         overflow-y: auto;
       }
 
-      h1 { font-size: 1.2rem; margin-bottom: 10px; color: #007acc; }
-      h2 { font-size: 0.9rem; text-transform: uppercase; color: #888; margin-bottom: 5px; margin-top: 15px; }
+      #controls > div {
+        display: flex;
+        flex-direction: column;
+      }
 
-      label { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+      h1 { font-size: 1.5rem; margin-bottom: 10px; color: #007acc; }
+      h2 { font-size: 1.2rem; text-transform: uppercase; color: #888; margin-bottom: 5px; margin-top: 15px; }
+
+      label { display: flex; justify-content: space-between; align-items: center; font-size: 1.0rem; }
       select, input[type="number"] {
         background: #333;
         border: 1px solid #3e3e42;
@@ -46,16 +51,23 @@
         border-radius: 4px;
         width: 140px;
         margin-top: 5px;
+        font-size: 1rem;
       }
       input[type="range"] { width: 100%; margin-top: 5px; }
       
+      input:disabled, select:disabled, label:has(input:disabled), label:has(select:disabled) {
+        color: #aaa;
+      }
+
+
       button {
         background-color: #007acc;
         color: white;
         border: none;
-        padding: 10px;
+        padding: 15px;
         border-radius: 4px;
         cursor: pointer;
+        font-size: 1.1rem;
         font-weight: bold;
         margin-top: 20px;
         transition: background 0.2s;
@@ -63,7 +75,6 @@
       button:hover { background-color: #0062a3; }
 
       .canvas-wrapper {
-        flex-grow: 1;
         display: flex;
         justify-content: center;
         align-items: center;
@@ -81,6 +92,10 @@
         max-height: 90%;
       }
 
+      #main-canvas-wrapper {
+        flex-grow: 1;
+      }
+
       #status {
         position: absolute;
         bottom: 20px;
@@ -88,8 +103,15 @@
         background: rgba(0,0,0,0.7);
         padding: 5px 10px;
         border-radius: 4px;
-        font-size: 0.8rem;
+        font-size: 1.2rem;
         pointer-events: none;
+      }
+
+      #preview-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
       }
     </style>
   </head>
@@ -100,14 +122,17 @@
 
         <div>
           <h2>Simulation</h2>
-          <label>Example Image
-            <select id="img-select"></select>
-          </label>
           <label style="margin-top:10px">Model
             <select id="model-select">
               <option value="OVERLAPPING">Overlapping</option>
               <option value="SIMPLE">Simple Tiled</option>
             </select>
+          </label>
+          <label>Example Image
+            <select id="img-select"></select>
+          </label>
+          <label>
+            Output size: <input type="number" id="output-size" value="24" min="2" max="64">
           </label>
         </div>
 
@@ -149,12 +174,15 @@
         </div>
       </div>
 
-      <div class="canvas-wrapper">
+      <div id="main-canvas-wrapper" class="canvas-wrapper">
         <canvas id="main-canvas"></canvas>
         <div id="status">Ready</div>
       </div>
 
-      <div id="preview-canvas-wrapper" class="canvas-wrapper"></div>
+      <div id="preview-section">
+        <h2>Extracted tiles:</h2>
+        <div id="preview-canvas-wrapper" class="canvas-wrapper"></div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -26,7 +26,7 @@ const CARDINALITY: Record<string, number> = {
   X: 1, L: 4, T: 4, I: 2, "\\": 2
 };
 
-export async function createSimpleTiledTileset(
+export async function createStmTileset(
   xml: string, tilesDir: string,
   inferNeighborhood: boolean = false,
   inferredNeighborhoodWidth: number = 1,
