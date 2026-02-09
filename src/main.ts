@@ -15,7 +15,7 @@ import imgSpirals from "@assets/Spirals.png";
 import imgWall from "@assets/wall.png";
 import imgFlowers from "@assets/flowers.png";
 import imgPlatformer from "@assets/platformer.png";
-import xmlCastle from "@assets/tilesets/castle/castle.xml?raw"  ;
+import xmlCastle from "@assets/tilesets/castle/castle.xml?raw";
 import { Tileset } from "./core/tileset";
 
 const SIMPLE_TILESET_PATH = "../assets/tilesets/castle/";
@@ -32,8 +32,8 @@ const IMAGES: Record<string, string> = {
 // configuration
 const CANVAS_WIDTH = 712;
 const CANVAS_HEIGHT = 712;
-const GRID_WIDTH = 16;
-const GRID_HEIGHT = 16;
+const GRID_WIDTH = 40;
+const GRID_HEIGHT = 40;
 
 let currentCancelToken = { cancelled: false };
 let gpuApp: GPUApp | null = null;
@@ -88,13 +88,14 @@ function initUI() {
     runSimulation();
   });
 
+  ui.previewTilesCheck.checked = false;
   ui.previewTilesCheck.addEventListener("input", () => {
+    if (!wfc.tileset) return;
+
     const preview = ui.previewTilesCheck.checked;
     if (preview) {
       ui.previewCanvasWrapper.style.display = "flex";
       ui.previewCanvasWrapper.innerHTML = "";
-
-      assert(wfc.tileset != null, "Tileset is not initialized");
 
       previewBlocks(
         ui.previewCanvasWrapper,
@@ -171,7 +172,7 @@ async function runSimulation() {
       wfc.tileset = await createOverlappingTileset(IMAGES[imgKey], tileSize, symmetry);
     } else {
       // @TODO simple model tileset selection
-      const res = await createSimpleTiledTileset(xmlCastle, SIMPLE_TILESET_PATH);
+      const res = await createSimpleTiledTileset(xmlCastle, SIMPLE_TILESET_PATH, true, 1, 40);
 
       wfc.tileset = res.tileset;
       base.dimensions.tileSize = res.tileset.tileSize;

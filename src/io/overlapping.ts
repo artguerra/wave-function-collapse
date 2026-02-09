@@ -164,6 +164,6 @@ function compatible(tile: Tile, neighbor: Tile, dir: number): boolean {
   return true;
 }
 
-function rgbaEqual(a: RGBA, b: RGBA) {
+function rgbaEqual(a: RGBA, b: RGBA): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
 }

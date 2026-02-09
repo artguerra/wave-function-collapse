@@ -1,6 +1,7 @@
 import { assert } from "@/utils";
+import { idx, OPPOSITE } from "@/utils/grid";
 import { decodePNG, pngToPixelBlock, rotateBlock90 } from "@/utils/image";
-import type { Tile } from "@/core/types";
+import type { RGBA, Tile } from "@/core/types";
 import { Bitset } from "@/core/bitset";
 import { Tileset } from "@/core/tileset";
 
@@ -17,7 +18,10 @@ const CARDINALITY: Record<string, number> = {
 };
 
 export async function createSimpleTiledTileset(
-  xml: string, tilesDir: string
+  xml: string, tilesDir: string,
+  inferNeighborhood: boolean = false,
+  inferredNeighborhoodWidth: number = 1,
+  inferrenceTolerance: number = 40
 ): Promise<{ tileset: Tileset, tileSize: number }> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, "text/xml");
@@ -46,16 +50,14 @@ export async function createSimpleTiledTileset(
     else assert(tileSize == png.width, "All the tiles should have the same size.");
     
     const pixels = pngToPixelBlock(png);
-    tiles.push({ id: tiles.length, pixels });
-    frequencies.push(weight);
 
     // add symmetries
     let rotated = pixels;
-    for (let i = 1; i < cardinality; ++i) {
-      rotated = rotateBlock90(rotated);
+    for (let i = 0; i < cardinality; ++i) {
       tiles.push({ id: tiles.length, pixels: rotated });
-    
       frequencies.push(weight);
+
+      rotated = rotateBlock90(rotated);
     }
   }
 
@@ -67,49 +69,64 @@ export async function createSimpleTiledTileset(
     Array.from({ length: nTiles }, () => new Bitset(nTiles)), // E
     Array.from({ length: nTiles }, () => new Bitset(nTiles)), // S
   ];
-  
-  const getTileIdx = (tileName: string, rot: number): number => {
-    const parts = tileName.split(/\s+/);
-    const name = parts[0];
-    const tileRotation = parts.length > 1 ? parseInt(parts[1]) : 0;
 
-    const tileInfo = tileNameMap.get(name)!;
+  if (inferNeighborhood) {
+    for (const tile of tiles) {
+      for (const neighTile of tiles) {
+        for (let d = 0; d < 4; ++d) {
+          if (allowed[d][tile.id].getBit(neighTile.id)) continue; // already computed
 
-    const offset = SYMMETRY_MAP[tileInfo.sym](tileRotation + rot);
-    return tileInfo.firstIdx + offset;
-  }
-
-  const neighbors = doc.querySelectorAll("neighbors neighbor");
-  for (const neigh of neighbors) {
-    const leftstr = neigh.getAttribute("left")!;
-    const rightstr = neigh.getAttribute("right")!;
-
-    for (let r = 0; r < 4; ++r) {
-      const leftTile = getTileIdx(leftstr, r);
-      const rightTile = getTileIdx(rightstr, r);
-
-      // normal (no rotation)
-      if (r == 0) {
-        allowed[0][rightTile].setBit(leftTile);
-        allowed[2][leftTile].setBit(rightTile);
+          if (compatible(tile, neighTile, d, inferredNeighborhoodWidth, inferrenceTolerance)) {
+            allowed[d][tile.id].setBit(neighTile.id);
+            allowed[OPPOSITE[d]][neighTile.id].setBit(tile.id);
+          }
+        }
       }
+    }
+  } else {
+    const getTileIdx = (tileName: string, rot: number): number => {
+      const parts = tileName.split(/\s+/);
+      const name = parts[0];
+      const tileRotation = parts.length > 1 ? parseInt(parts[1]) : 0;
 
-      // rotated 90deg
-      if (r == 1) {
-        allowed[3][rightTile].setBit(leftTile);
-        allowed[1][leftTile].setBit(rightTile);
-      }
+      const tileInfo = tileNameMap.get(name)!;
 
-      // rotated 180deg
-      if (r == 2) {
-        allowed[2][rightTile].setBit(leftTile);
-        allowed[0][leftTile].setBit(rightTile);
-      }
+      const offset = SYMMETRY_MAP[tileInfo.sym](tileRotation + rot);
+      return tileInfo.firstIdx + offset;
+    }
 
-      // rotated 270deg
-      if (r == 3) {
-        allowed[1][rightTile].setBit(leftTile);
-        allowed[3][leftTile].setBit(rightTile);
+    const neighbors = doc.querySelectorAll("neighbors neighbor");
+    for (const neigh of neighbors) {
+      const leftstr = neigh.getAttribute("left")!;
+      const rightstr = neigh.getAttribute("right")!;
+
+      for (let r = 0; r < 4; ++r) {
+        const leftTile = getTileIdx(leftstr, r);
+        const rightTile = getTileIdx(rightstr, r);
+
+        // normal (no rotation)
+        if (r == 0) {
+          allowed[0][rightTile].setBit(leftTile);
+          allowed[2][leftTile].setBit(rightTile);
+        }
+
+        // rotated 90deg
+        if (r == 1) {
+          allowed[3][rightTile].setBit(leftTile);
+          allowed[1][leftTile].setBit(rightTile);
+        }
+
+        // rotated 180deg
+        if (r == 2) {
+          allowed[2][rightTile].setBit(leftTile);
+          allowed[0][leftTile].setBit(rightTile);
+        }
+
+        // rotated 270deg
+        if (r == 3) {
+          allowed[1][rightTile].setBit(leftTile);
+          allowed[3][leftTile].setBit(rightTile);
+        }
       }
     }
   }
@@ -132,3 +149,51 @@ export async function createSimpleTiledTileset(
   return { tileset: new Tileset(tileSize, tiles, normalizedFrequencies, allowed), tileSize };
 }
 
+function compatible(tile: Tile, neighbor: Tile, dir: number, pixelWidth: number, tolerance: number): boolean {
+  const ksize = tile.pixels.ksize;
+  const verifyMargin = ksize - pixelWidth;
+
+  let meanDist = 0;
+  let startX = 0, endX = ksize, startY = 0, endY = ksize;
+  let shiftX = 0, shiftY = 0;
+
+  switch (dir) {
+    case 0: // W
+      endX = ksize - verifyMargin;
+      shiftX = verifyMargin; 
+      break;
+    case 2: // E
+      startX = verifyMargin;
+      shiftX = -verifyMargin;
+      break;
+    case 1: // N
+      endY = ksize - verifyMargin;
+      shiftY = verifyMargin;
+      break;
+    case 3: // S
+      startY = verifyMargin;
+      shiftY = -verifyMargin;
+      break;
+  }
+
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      const tileIdx = idx(y, x, ksize);
+      const neighIdx = idx(y + shiftY, x + shiftX, ksize);
+
+      meanDist += rgbaDist(tile.pixels.values[tileIdx], neighbor.pixels.values[neighIdx]);
+    }
+  }
+  meanDist /= ksize * pixelWidth;
+
+  if (meanDist > tolerance) return false;
+
+  return true;
+}
+
+function rgbaDist(a: RGBA, b: RGBA): number {
+  const vec = [a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]];
+  const dist = Math.sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2] + vec[3] * vec[3]);
+
+  return dist;
+}
