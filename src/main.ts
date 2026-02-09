@@ -15,10 +15,10 @@ import imgSpirals from "@assets/Spirals.png";
 import imgWall from "@assets/wall.png";
 import imgFlowers from "@assets/flowers.png";
 import imgPlatformer from "@assets/platformer.png";
-import xmlCastle from "@assets/tilesets/castle/castle.xml?raw";
+import xmlCastle from "@assets/tilesets/circuit/circuit.xml?raw";
 import { Tileset } from "./core/tileset";
 
-const SIMPLE_TILESET_PATH = "../assets/tilesets/castle/";
+const SIMPLE_TILESET_PATH = "../assets/tilesets/circuit/";
 
 const IMAGES: Record<string, string> = {
   "Magic Office": imgOffice,
@@ -172,7 +172,7 @@ async function runSimulation() {
       wfc.tileset = await createOverlappingTileset(IMAGES[imgKey], tileSize, symmetry);
     } else {
       // @TODO simple model tileset selection
-      const res = await createSimpleTiledTileset(xmlCastle, SIMPLE_TILESET_PATH, true, 1, 40);
+      const res = await createSimpleTiledTileset(xmlCastle, SIMPLE_TILESET_PATH);
 
       wfc.tileset = res.tileset;
       base.dimensions.tileSize = res.tileset.tileSize;

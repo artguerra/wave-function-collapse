@@ -5,7 +5,16 @@ import type { RGBA, Tile } from "@/core/types";
 import { Bitset } from "@/core/bitset";
 import { Tileset } from "@/core/tileset";
 
-const SYMMETRY_MAP: Record<string, (r: number) => number> = {
+
+const REFLECT_IDX: Record<string, (idx: number) => number> = {
+  X: (idx) => idx,
+  L: (idx) => (idx % 2 === 0) ? (idx + 1) : (idx - 1),
+  T: (idx) => (idx % 2 === 0) ? idx : (4 - idx),
+  I: (idx) => idx,
+  "\\": (idx) => 1 - idx,
+}
+
+const ROTATION_MAP: Record<string, (r: number) => number> = {
   X: (_) => 0,
   L: (r) => r % 4,
   T: (r) => r % 4,
@@ -84,15 +93,17 @@ export async function createSimpleTiledTileset(
       }
     }
   } else {
-    const getTileIdx = (tileName: string, rot: number): number => {
+    const getTileIdx = (tileName: string, rot: number, reflected: boolean): number => {
       const parts = tileName.split(/\s+/);
       const name = parts[0];
       const tileRotation = parts.length > 1 ? parseInt(parts[1]) : 0;
 
       const tileInfo = tileNameMap.get(name)!;
 
-      const offset = SYMMETRY_MAP[tileInfo.sym](tileRotation + rot);
-      return tileInfo.firstIdx + offset;
+      const rotationBase = reflected ? REFLECT_IDX[tileInfo.sym](tileRotation) : tileRotation;
+      const rotationOffset = ROTATION_MAP[tileInfo.sym](rotationBase + rot);
+
+      return tileInfo.firstIdx + rotationOffset;
     }
 
     const neighbors = doc.querySelectorAll("neighbors neighbor");
@@ -100,44 +111,42 @@ export async function createSimpleTiledTileset(
       const leftstr = neigh.getAttribute("left")!;
       const rightstr = neigh.getAttribute("right")!;
 
-      for (let r = 0; r < 4; ++r) {
-        const leftTile = getTileIdx(leftstr, r);
-        const rightTile = getTileIdx(rightstr, r);
+      for (let refl = 0; refl < 2; ++refl) {
+        const reflected = refl == 1;
 
-        // normal (no rotation)
-        if (r == 0) {
-          allowed[0][rightTile].setBit(leftTile);
-          allowed[2][leftTile].setBit(rightTile);
-        }
+        for (let rot = 0; rot < 4; ++rot) {
+          const leftTile = getTileIdx(leftstr, rot, reflected);
+          const rightTile = getTileIdx(rightstr, rot, reflected);
+          const R = reflected ? leftTile : rightTile;
+          const L = reflected ? rightTile : leftTile;
 
-        // rotated 90deg
-        if (r == 1) {
-          allowed[3][rightTile].setBit(leftTile);
-          allowed[1][leftTile].setBit(rightTile);
-        }
+          // normal (no rotation)
+          if (rot == 0) {
+            allowed[0][R].setBit(L);
+            allowed[2][L].setBit(R);
+          }
 
-        // rotated 180deg
-        if (r == 2) {
-          allowed[2][rightTile].setBit(leftTile);
-          allowed[0][leftTile].setBit(rightTile);
-        }
+          // rotated 90deg
+          if (rot == 1) {
+            allowed[3][R].setBit(L);
+            allowed[1][L].setBit(R);
+          }
 
-        // rotated 270deg
-        if (r == 3) {
-          allowed[1][rightTile].setBit(leftTile);
-          allowed[3][leftTile].setBit(rightTile);
+          // rotated 180deg
+          if (rot == 2) {
+            allowed[2][R].setBit(L);
+            allowed[0][L].setBit(R);
+          }
+
+          // rotated 270deg
+          if (rot == 3) {
+            allowed[1][R].setBit(L);
+            allowed[3][L].setBit(R);
+          }
         }
       }
     }
   }
-
-  // console.log("neighs of tile 0: ");
-  // for (let d = 0; d < 4; ++d) {
-  //   console.log("direction: ", d);
-  //   for (const n of allowed[d][0]) {
-  //     console.log(n)
-  //   }
-  // }
 
   let totalFrequency = 0;
   for (let i = 0; i < frequencies.length; ++i) {
@@ -186,9 +195,7 @@ function compatible(tile: Tile, neighbor: Tile, dir: number, pixelWidth: number,
   }
   meanDist /= ksize * pixelWidth;
 
-  if (meanDist > tolerance) return false;
-
-  return true;
+  return meanDist <= tolerance;
 }
 
 function rgbaDist(a: RGBA, b: RGBA): number {
