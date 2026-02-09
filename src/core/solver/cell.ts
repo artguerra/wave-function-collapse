@@ -43,16 +43,30 @@ export class Cell {
   }
 
   // choose at random one of the remaining states, considering tileset frequencies
-  chooseRandomTile(): number {
+  chooseRandomTile(density?: number, denseTiles?: Bitset): number {
     const currentFrequencies: number[] = [];
     let sumFrequencies = 0;
 
     for (const [idx, possible] of this.possibleStates.bits()) {
-      const freq = possible ? this.tileset.frequencies[idx] : 0;
+      if (!possible) {
+        currentFrequencies.push(0);
+        continue;
+      }
+
+      let freq = this.tileset.frequencies[idx];
+
+      if (density !== undefined && denseTiles) {
+        const isDense = denseTiles.getBit(idx);
+
+        const STRENGTH = 100; 
+
+        if (isDense) {
+           freq += density * STRENGTH;
+        }
+      }
 
       currentFrequencies.push(freq);
       sumFrequencies += freq;
-
     }
 
     if (sumFrequencies == 0) return -1;

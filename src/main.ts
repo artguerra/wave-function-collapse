@@ -75,7 +75,7 @@ interface State {
   wave: Wave | null;
 
   densityMap: number[][] | null;
-  emptyTiles: Set<number>;
+  denseTiles: Set<number>;
   tilesetNeedsReload: boolean;
 };
 
@@ -84,7 +84,7 @@ const wfc: State = {
   tileset: null,
   wave: null,
   densityMap: null,
-  emptyTiles: new Set(),
+  denseTiles: new Set(),
   tilesetNeedsReload: true,
 };
 
@@ -117,7 +117,7 @@ function initUI() {
     ui.previewTilesSection.style.display = shown ? "flex" : "none";
 
     if (wfc.mode == "density-edit")
-      ui.previewTilesSection.querySelector("h2")!.innerText = "Select empty tiles:";
+      ui.previewTilesSection.querySelector("h2")!.innerText = "Select tiles to densen:";
     else
       ui.previewTilesSection.querySelector("h2")!.innerText = "Extracted tiles:";
   };
@@ -160,7 +160,7 @@ function initUI() {
     wfc.tilesetNeedsReload = true;
 
     resetDensity();
-    wfc.emptyTiles = new Set();
+    wfc.denseTiles = new Set();
 
     if (wfc.mode == "running") runSimulation();
     else
@@ -196,7 +196,7 @@ function initUI() {
     if (!wfc.tileset) return;
     if (wfc.mode == "running") return;
 
-    ui.status.innerText = "Selecting empty tiles.";
+    ui.status.innerText = "Selecting dense tiles.";
 
     const cols = Math.floor(Math.sqrt(wfc.tileset.size));
     const rows = Math.ceil(wfc.tileset.size / cols);
@@ -209,10 +209,10 @@ function initUI() {
     if (i >= wfc.tileset.size) return;
 
 
-    if (wfc.emptyTiles.has(i))
-      wfc.emptyTiles.delete(i);
+    if (wfc.denseTiles.has(i))
+      wfc.denseTiles.delete(i);
     else
-      wfc.emptyTiles.add(i);
+      wfc.denseTiles.add(i);
 
     updateTilesPreview();
   });
@@ -291,7 +291,7 @@ function updateTilesPreview(): void {
     Math.floor(Math.sqrt(wfc.tileset.size)),
     64,
     2,
-    wfc.mode == "running" ? undefined : wfc.emptyTiles,
+    wfc.mode == "running" ? undefined : wfc.denseTiles,
   );
 }
 
@@ -372,7 +372,11 @@ async function runSimulation() {
   if (token.cancelled) return;
 
   // initialize wave
-  wfc.wave = new Wave(outputSize, outputSize, wfc.tileset, overlapping, heuristic, toroidal);
+  wfc.wave = new Wave(
+    outputSize, outputSize, wfc.tileset,
+    overlapping, heuristic, toroidal,
+    wfc.densityMap ?? undefined, wfc.denseTiles
+  );
 
   const pipeline = initRenderPipeline(base);
   gpuApp = initGPUBuffers(pipeline, overlapping);

@@ -2,6 +2,7 @@ import type { Vec2 } from "@/core/types.ts";
 import { Tileset } from "@/core/tileset";
 import { Cell } from "@/core/solver/cell";
 import { idx, DX, DY, OPPOSITE } from "@/utils/grid.ts";
+import { Bitset } from "../bitset";
 
 type Heuristic = "SCANLINE" | "ENTROPY";
 
@@ -20,6 +21,11 @@ export class Wave {
   waveSize: number;
   wave: Cell[]; // each actual cell with its possible states management
 
+  // density control
+  consideringDensity: boolean;
+  densityMap?: number[][];
+  emptyTiles?: Bitset;
+
   // propagation data structures
   propagationStack: [cell: number, tile: number][];
   supporters: number[][][]; // how many supporters a specific tile in a specific cell has in each direction
@@ -28,7 +34,9 @@ export class Wave {
     width: number, height: number,
     tileset: Tileset, overlapping: boolean,
     heuristic: Heuristic = "ENTROPY",
-    toroidal: boolean = false
+    toroidal: boolean = false,
+    densityMap?: number[][],
+    emptyTiles?: Set<number>
   ) {
     this.overlapping = overlapping;
     this.heuristic = heuristic;
@@ -51,6 +59,17 @@ export class Wave {
     for (const freq of tileset.frequencies) {
       this.totalWeightSum += freq;
       this.totalWeightLogWeightsSum += freq * Math.log(freq);
+    }
+
+    this.consideringDensity = densityMap !== undefined && emptyTiles !== undefined;
+
+    if (this.consideringDensity) {
+      this.densityMap = densityMap!;
+      this.emptyTiles = new Bitset(tileset.size);
+
+      for (const tile of emptyTiles!) {
+        this.emptyTiles.setBit(tile);
+      }
     }
 
     this.reset();
@@ -124,7 +143,16 @@ export class Wave {
 
   observe(cellIdx: number): boolean {
     const cell = this.wave[cellIdx];
-    const chosenTile = cell.chooseRandomTile();
+
+    let density: number | undefined = undefined;
+    if (this.consideringDensity) {
+      const x = cell.pos.x;
+      const y = cell.pos.y;
+
+      density = this.densityMap![y][x];
+    }
+
+    const chosenTile = cell.chooseRandomTile(density, this.emptyTiles);
 
     if (chosenTile == -1) return false;
 
