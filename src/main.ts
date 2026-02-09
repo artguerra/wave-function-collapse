@@ -113,10 +113,13 @@ function initUI() {
   });
 
   // tile preview
-  ui.previewTilesCheck.addEventListener("input", () => {
+  const setPreviewDisplay = () => {
     const shown = ui.previewTilesCheck.checked;
     ui.previewTilesSection.style.display = shown ? "flex" : "none";
-  });
+  };
+
+  setPreviewDisplay();
+  ui.previewTilesCheck.addEventListener("input", setPreviewDisplay);
 
   // panning control
   let isDragging = false;
@@ -140,17 +143,11 @@ function initUI() {
 function updateTilesPreview(): void {
   if (!wfc.tileset) return;
 
-  const preview = ui.previewTilesCheck.checked;
-  if (preview) {
-    ui.previewCanvasWrapper.style.display = "flex";
-    ui.previewCanvasWrapper.innerHTML = "";
-
-    previewBlocks(
-      ui.previewCanvasWrapper,
-      wfc.tileset.tiles.map(t => t.pixels),
-      Math.floor(Math.sqrt(wfc.tileset.size))
-    );
-  } else ui.previewCanvasWrapper.style.display = "none";
+  previewBlocks(
+    ui.previewCanvasWrapper,
+    wfc.tileset.tiles.map(t => t.pixels),
+    Math.floor(Math.sqrt(wfc.tileset.size))
+  );
 }
 
 async function initGPU() {
