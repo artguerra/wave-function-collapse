@@ -24,7 +24,7 @@ export class Wave {
   // density control
   consideringDensity: boolean;
   densityMap?: number[][];
-  emptyTiles?: Bitset;
+  denseTiles?: Bitset;
 
   // propagation data structures
   propagationStack: [cell: number, tile: number][];
@@ -36,7 +36,7 @@ export class Wave {
     heuristic: Heuristic = "ENTROPY",
     toroidal: boolean = false,
     densityMap?: number[][],
-    emptyTiles?: Set<number>
+    denseTiles?: Set<number>
   ) {
     this.overlapping = overlapping;
     this.heuristic = heuristic;
@@ -61,14 +61,14 @@ export class Wave {
       this.totalWeightLogWeightsSum += freq * Math.log(freq);
     }
 
-    this.consideringDensity = densityMap !== undefined && emptyTiles !== undefined;
+    this.consideringDensity = densityMap !== undefined && denseTiles !== undefined;
 
     if (this.consideringDensity) {
       this.densityMap = densityMap!;
-      this.emptyTiles = new Bitset(tileset.size);
+      this.denseTiles = new Bitset(tileset.size);
 
-      for (const tile of emptyTiles!) {
-        this.emptyTiles.setBit(tile);
+      for (const tile of denseTiles!) {
+        this.denseTiles.setBit(tile);
       }
     }
 
@@ -152,7 +152,7 @@ export class Wave {
       density = this.densityMap![y][x];
     }
 
-    const chosenTile = cell.chooseRandomTile(density, this.emptyTiles);
+    const chosenTile = cell.chooseRandomTile(density, this.denseTiles);
 
     if (chosenTile == -1) return false;
 

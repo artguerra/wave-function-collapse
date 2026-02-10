@@ -39,10 +39,10 @@
         flex-direction: column;
       }
 
-      h1 { font-size: 1.5rem; margin-bottom: 10px; color: #007acc; }
-      h2 { font-size: 1.2rem; text-transform: uppercase; color: #888; margin-bottom: 5px; margin-top: 15px; }
+      h1 { font-size: 1.5rem; margin-bottom: 5px; color: #007acc; }
+      h2 { font-size: 1.2rem; text-transform: uppercase; color: #888; margin-bottom: 5px; margin-top: 10px; }
 
-      label { display: flex; justify-content: space-between; align-items: center; font-size: 1.0rem; }
+      label { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
       select, input[type="number"] {
         background: #333;
         border: 1px solid #3e3e42;
@@ -51,14 +51,14 @@
         border-radius: 4px;
         width: 140px;
         margin-top: 5px;
-        font-size: 1rem;
+        font-size: 0.9rem;
       }
       input[type="range"] { width: 100%; margin-top: 5px; }
+      input[type="checkbox"] { margin-top: 6px; }
       
       input:disabled, select:disabled, label:has(input:disabled), label:has(select:disabled) {
         color: #aaa;
       }
-
 
       button {
         background-color: #007acc;
@@ -67,7 +67,7 @@
         padding: 15px;
         border-radius: 4px;
         cursor: pointer;
-        font-size: 1.1rem;
+        font-size: 1.0rem;
         font-weight: bold;
         margin-top: 20px;
         transition: background 0.5s;
@@ -115,15 +115,16 @@
         background: rgba(0,0,0,0.7);
         padding: 5px 10px;
         border-radius: 4px;
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         pointer-events: none;
       }
 
-      #preview-section {
+      #preview-section, #preview-section div {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        overflow-y: auto;
       }
     </style>
   </head>
@@ -175,6 +176,9 @@
           <label>
             Preview tiles <input type="checkbox" id="preview-tiles-check">
           </label>
+          <label>
+            Preview maps <input type="checkbox" id="preview-maps-check">
+          </label>
         </div>
 
         <div>
@@ -199,12 +203,22 @@
         <div id="status">Ready</div>
       </div>
 
-      <div id="preview-section" style="display: none;">
-        <h2></h2>
-        <div class="canvas-wrapper">
-          <canvas id="preview-canvas" class="canvas-wrapper"></canvas>
+      <div id="preview-section">
+        <div id="tiles-preview" style="display: none;">
+          <h2></h2>
+          <div class="canvas-wrapper">
+            <canvas id="preview-canvas"></canvas>
+          </div>
+        </div>
+
+        <div id="maps-previews" style="display: none;">
+          <h2>Density map:</h2>
+          <div class="canvas-wrapper">
+            <canvas id="density-preview-canvas"></canvas>
+          </div>
         </div>
       </div>
+
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -174,3 +174,48 @@ export function previewBlocks(
     }
   }
 }
+
+export function previewMap(
+  canvas: HTMLCanvasElement,
+  map: number[][],
+  scale = 6,
+) {
+  if (map.length < 1) return;
+
+  const cols = map.length;
+  const rows = map[0].length;
+
+  canvas.width = cols * scale;
+  canvas.height = rows * scale;
+
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+
+  const off = new OffscreenCanvas(cols, rows);
+  const offCtx = off.getContext("2d")!;
+  const imgData = offCtx.createImageData(cols, rows);
+
+  const encodeColor = (v: number) => {
+    const val = Math.min(1, Math.max(0, v));
+    return [val * 255, val * 255, val * 255, 255]; // black to white (rgba from 0 to 255)
+  };
+
+  let idx = 0;
+  for (let y = 0; y < rows; ++y) {
+    for (let x = 0; x < cols; ++x) {
+      const [r, g, b, a] = encodeColor(map[y][x]);
+
+      imgData.data[idx++] = r;
+      imgData.data[idx++] = g;
+      imgData.data[idx++] = b;
+      imgData.data[idx++] = a;
+    }
+  }
+
+  offCtx.putImageData(imgData, 0, 0);
+
+  ctx.drawImage(
+    off as unknown as CanvasImageSource, 0, 0,
+    cols * scale, rows * scale,
+  );
+}

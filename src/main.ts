@@ -1,7 +1,7 @@
 import { createOverlappingTileset } from "@/io/overlapping";
 import { createStmTileset } from "@/io/stm";
 import { idx } from "@/utils/grid";
-import { previewBlocks } from "@/utils/image";
+import { previewBlocks, previewMap } from "@/utils/image";
 import type { SymmetryMode, Vec2 } from "@/core/types";
 import { Wave } from "@/core/solver/wave";
 import {
@@ -64,8 +64,11 @@ const ui = {
   status: document.querySelector("#status") as HTMLElement,
   canvas: document.querySelector("#main-canvas") as HTMLCanvasElement,
   previewTilesCheck: document.querySelector("#preview-tiles-check") as HTMLInputElement,
-  previewTilesSection: document.querySelector("#preview-section") as HTMLDivElement,
-  previewCanvas: document.querySelector("#preview-canvas") as HTMLCanvasElement,
+  previewMapsCheck: document.querySelector("#preview-maps-check") as HTMLInputElement,
+  tilesPreviewSection: document.querySelector("#tiles-preview") as HTMLDivElement,
+  tilesPreviewCanvas: document.querySelector("#preview-canvas") as HTMLCanvasElement,
+  mapsPreviewsSection: document.querySelector("#maps-previews") as HTMLDivElement,
+  densityPreviewCanvas: document.querySelector("#density-preview-canvas") as HTMLCanvasElement,
 };
 
 // WFC global references
@@ -109,25 +112,29 @@ function initUI() {
     }
   });
 
-  // tile preview
+  // tile & maps preview
   const setPreviewDisplay = () => {
     updateTilesPreview();
 
-    const shown = ui.previewTilesCheck.checked;
-    ui.previewTilesSection.style.display = shown ? "flex" : "none";
+    ui.tilesPreviewSection.style.display = ui.previewTilesCheck.checked ? "flex" : "none";
+    ui.mapsPreviewsSection.style.display = ui.previewMapsCheck.checked ? "flex" : "none";
 
     if (wfc.mode == "density-edit")
-      ui.previewTilesSection.querySelector("h2")!.innerText = "Select tiles to densen:";
+      ui.tilesPreviewSection.querySelector("h2")!.innerText = "Select tiles to densen:";
     else
-      ui.previewTilesSection.querySelector("h2")!.innerText = "Extracted tiles:";
+      ui.tilesPreviewSection.querySelector("h2")!.innerText = "Extracted tiles:";
   };
 
   setPreviewDisplay();
   ui.previewTilesCheck.addEventListener("input", setPreviewDisplay);
+  ui.previewMapsCheck.addEventListener("input", setPreviewDisplay);
 
   // restart generation
   ui.restartBtn.addEventListener("click", () => {
     wfc.mode = "running";
+
+    if (wfc.densityMap) ui.previewMapsCheck.checked = true;
+
     setPreviewDisplay();
     runSimulation();
   });
@@ -140,6 +147,7 @@ function initUI() {
     // update ui
     ui.status.innerText = "Entered density map editing mode."
     ui.previewTilesCheck.checked = true;
+    ui.previewMapsCheck.checked = false;
     setPreviewDisplay();
 
     editDensityMap();
@@ -167,6 +175,7 @@ function initUI() {
       loadTileset().then(() => { wfc.tilesetNeedsReload = false; });
   };
   ui.imgSelect.addEventListener("input", resetTileset);
+  ui.symSelect.addEventListener("input", resetTileset);
 
   // model selection
   const setInputOptions = () => {
@@ -192,7 +201,7 @@ function initUI() {
 
 
   // mouse events
-  ui.previewCanvas.addEventListener("mousedown", (e) => {
+  ui.tilesPreviewCanvas.addEventListener("mousedown", (e) => {
     if (!wfc.tileset) return;
     if (wfc.mode == "running") return;
 
@@ -201,8 +210,8 @@ function initUI() {
     const cols = Math.floor(Math.sqrt(wfc.tileset.size));
     const rows = Math.ceil(wfc.tileset.size / cols);
 
-    const x = Math.floor(cols * (e.offsetX / ui.previewCanvas.offsetWidth));
-    const y = Math.floor(rows * (e.offsetY / ui.previewCanvas.offsetHeight));
+    const x = Math.floor(cols * (e.offsetX / ui.tilesPreviewCanvas.offsetWidth));
+    const y = Math.floor(rows * (e.offsetY / ui.tilesPreviewCanvas.offsetHeight));
 
     const i = idx(y, x, cols);
 
@@ -285,14 +294,24 @@ function paintDensity(mouseX: number, mouseY: number) {
 function updateTilesPreview(): void {
   if (!wfc.tileset) return;
 
+  const tilePreviewSize = Math.floor(Math.sqrt(wfc.tileset.size));
+  const tilePreviewScale = 64;
+  const tilePreviewGap = 2;
+
   previewBlocks(
-    ui.previewCanvas,
+    ui.tilesPreviewCanvas,
     wfc.tileset.tiles.map(t => t.pixels),
-    Math.floor(Math.sqrt(wfc.tileset.size)),
-    64,
-    2,
+    tilePreviewSize,
+    tilePreviewScale,
+    tilePreviewGap,
     wfc.mode == "running" ? undefined : wfc.denseTiles,
   );
+
+  if (wfc.densityMap) {
+    const gridWidth = parseInt(ui.outputSize.value);
+    const scale = (tilePreviewSize * (tilePreviewScale + tilePreviewGap)) / gridWidth;
+    previewMap(ui.densityPreviewCanvas, wfc.densityMap, scale);
+  }
 }
 
 // webgpu initialization
@@ -420,7 +439,7 @@ async function editDensityMap() {
 
   const encodeColor = (v: number) => {
     const val = Math.min(1, Math.max(0, v));
-    return [val * 255, val * 255, val * 255, 1]; // black to white (rgba from 0 to 255)
+    return [val * 255, val * 255, val * 255, 255]; // black to white (rgba from 0 to 255)
   }
 
   const colorBuffer = new Uint8ClampedArray(n * n * 4);
