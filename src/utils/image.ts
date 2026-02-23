@@ -1,7 +1,7 @@
 import { assert } from "@/utils";
 import { idx } from "@/utils/grid";
 import { PixelBlock } from "@/core/pixels";
-import type { PixelData } from "@/core/types";
+import type { PixelData, RGBA } from "@/core/types";
 
 type PngResponse = {
   width: number;
@@ -117,6 +117,7 @@ export function previewBlocks(
   scale = 64,
   gap = 2,
   selectedIndices?: Set<number>,
+  selectedIndicesColor?: RGBA,
 ) {
   if (blocks.length === 0) return;
 
@@ -165,25 +166,32 @@ export function previewBlocks(
     );
 
     if (selectedIndices && selectedIndices.has(i)) {
-      ctx.strokeStyle = "#f13724";
+      const col = selectedIndicesColor!;
+      const rgb2hex = (v: number) => Math.round(v).toString(16);
+      const hexColor = `#${rgb2hex(col[0])}${rgb2hex(col[1])}${rgb2hex(col[2])}`;
+
+      ctx.strokeStyle = hexColor;
       ctx.lineWidth = 3;
       ctx.strokeRect(dx + 1.5, dy + 1.5, tileDrawSize - 3, tileDrawSize - 3);
       
-      ctx.fillStyle = "rgba(255, 99, 71, 0.2)";
+      ctx.fillStyle = `${hexColor}40`;
       ctx.fillRect(dx, dy, tileDrawSize, tileDrawSize);
     }
   }
 }
 
-export function previewMap(
+export function previewMaps(
   canvas: HTMLCanvasElement,
-  map: number[][],
+  maps: number[][][],
+  mapsColors: RGBA[],
   scale = 6,
 ) {
-  if (map.length < 1) return;
+  if (maps.length < 1) return;
+  if (mapsColors.length !== maps.length) return;
 
-  const cols = map.length;
-  const rows = map[0].length;
+  const n = maps.length;
+  const rows = maps[0].length;
+  const cols = maps[0][0].length;
 
   canvas.width = cols * scale;
   canvas.height = rows * scale;
@@ -193,22 +201,44 @@ export function previewMap(
 
   const off = new OffscreenCanvas(cols, rows);
   const offCtx = off.getContext("2d")!;
-  const imgData = offCtx.createImageData(cols, rows);
+  const data = new Float32Array(cols * rows * 4);
 
-  const encodeColor = (v: number) => {
+  const encodeColor = (mapIdx: number, v: number) => {
     const val = Math.min(1, Math.max(0, v));
-    return [val * 255, val * 255, val * 255, 255]; // black to white (rgba from 0 to 255)
+    const color = mapsColors[mapIdx];
+    return [val * color[0], val * color[1], val * color[2], color[3]];
   };
 
-  let idx = 0;
+  const apparisons = Array.from({ length: rows }, () => new Array(cols).fill(0));
+  for (let i = 0; i < n; ++i) {
+    for (let y = 0; y < rows; ++y) {
+      for (let x = 0; x < cols; ++x) {
+        const value = maps[i][y][x];
+        if (value === 0) continue;
+
+        const imgIdx = idx(y, x, cols) * 4;
+        const [r, g, b, a] = encodeColor(i, value);
+
+        data[imgIdx] += r;
+        data[imgIdx + 1] += g;
+        data[imgIdx + 2] += b;
+        data[imgIdx + 3] += a;
+
+        apparisons[y][x]++;
+      }
+    }
+  }
+
+  const imgData = offCtx.createImageData(cols, rows);
   for (let y = 0; y < rows; ++y) {
     for (let x = 0; x < cols; ++x) {
-      const [r, g, b, a] = encodeColor(map[y][x]);
+      const imgIdx = idx(y, x, cols) * 4;
+      const painted = apparisons[y][x] > 0;
 
-      imgData.data[idx++] = r;
-      imgData.data[idx++] = g;
-      imgData.data[idx++] = b;
-      imgData.data[idx++] = a;
+      imgData.data[imgIdx] = painted ? data[imgIdx] / apparisons[y][x] : 0;
+      imgData.data[imgIdx + 1] = painted ? data[imgIdx + 1] / apparisons[y][x] : 0;
+      imgData.data[imgIdx + 2] = painted ? data[imgIdx + 2] / apparisons[y][x] : 0;
+      imgData.data[imgIdx + 3] = painted ? data[imgIdx + 3] / apparisons[y][x] : 0;
     }
   }
 

@@ -257,7 +257,7 @@ export class Wave {
         for (let y = 0; y < this.height; ++y) {
          for (let x = 0; x < this.width; ++x) {
            if (this.densityMaps![i][y][x] != 0) {
-             this.unvisitedDenseCells!.setBit(idx(y, x, this.height));
+             this.unvisitedDenseCells!.setBit(idx(y, x, this.width));
            }
          }
         }

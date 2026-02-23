@@ -1,8 +1,9 @@
 import { createOverlappingTileset } from "@/io/overlapping";
 import { createStmTileset } from "@/io/stm";
+import { randomSRGBAColor } from "@/utils";
 import { idx } from "@/utils/grid";
-import { previewBlocks, previewMap } from "@/utils/image";
-import type { SymmetryMode, Vec2 } from "@/core/types";
+import { previewBlocks, previewMaps } from "@/utils/image";
+import type { RGBA, SymmetryMode, Vec2 } from "@/core/types";
 import { Wave } from "@/core/solver/wave";
 import {
   type GPUAppBase, type GPUApp, initWebGPU, initRenderPipeline,
@@ -69,6 +70,8 @@ const ui = {
   tilesPreviewCanvas: document.querySelector("#preview-canvas") as HTMLCanvasElement,
   mapsPreviewsSection: document.querySelector("#maps-previews") as HTMLDivElement,
   densityPreviewCanvas: document.querySelector("#density-preview-canvas") as HTMLCanvasElement,
+  densityMapChooserDiv: document.querySelector("#density-map-chooser") as HTMLDivElement,
+  addDensityMapBtn: document.querySelector("#add-density-map-btn") as HTMLButtonElement,
 };
 
 // WFC global references
@@ -77,8 +80,11 @@ interface State {
   tileset: Tileset | null;
   wave: Wave | null;
 
-  densityMap: number[][] | null;
-  denseTiles: Set<number>;
+  densityMaps: number[][][];
+  denseTilesPerMap: Set<number>[];
+  densityMapsColors: RGBA[],
+  currentDensityMap: number;
+
   tilesetNeedsReload: boolean;
 };
 
@@ -86,8 +92,10 @@ const wfc: State = {
   mode: "running",
   tileset: null,
   wave: null,
-  densityMap: null,
-  denseTiles: new Set(),
+  densityMaps: [],
+  denseTilesPerMap: [],
+  densityMapsColors: [],
+  currentDensityMap: 0,
   tilesetNeedsReload: true,
 };
 
@@ -118,8 +126,9 @@ function initUI() {
 
     ui.tilesPreviewSection.style.display = ui.previewTilesCheck.checked ? "flex" : "none";
     ui.mapsPreviewsSection.style.display = ui.previewMapsCheck.checked ? "flex" : "none";
+    ui.densityMapChooserDiv.style.display = wfc.mode === "density-edit" ? "flex" : "none";
 
-    if (wfc.mode == "density-edit")
+    if (wfc.mode === "density-edit")
       ui.tilesPreviewSection.querySelector("h2")!.innerText = "Select tiles to densen:";
     else
       ui.tilesPreviewSection.querySelector("h2")!.innerText = "Extracted tiles:";
@@ -133,7 +142,7 @@ function initUI() {
   ui.restartBtn.addEventListener("click", () => {
     wfc.mode = "running";
 
-    if (wfc.densityMap) ui.previewMapsCheck.checked = true;
+    if (wfc.densityMaps.length > 0) ui.previewMapsCheck.checked = true;
 
     setPreviewDisplay();
     runSimulation();
@@ -153,12 +162,24 @@ function initUI() {
     editDensityMap();
   });
 
-  const resetDensity = () => {
-    if (wfc.densityMap) {
-      const n = parseInt(ui.outputSize.value);
-      wfc.densityMap = Array.from({ length: n }, () => new Array(n).fill(0));
+  // add new density map
+  const addDensityMap = () => {
+    createNewDensityMap();
+    updateTilesPreview();
+  };
+  ui.addDensityMapBtn.addEventListener("click", addDensityMap);
 
-      ui.status.innerText = "Density map reset.";
+  const resetDensity = () => {
+    if (wfc.densityMaps.length > 0) {
+      ui.status.innerText = "All density maps reset.";
+
+      wfc.currentDensityMap = 0;
+      wfc.densityMaps = [];
+      wfc.denseTilesPerMap = [];
+      wfc.densityMapsColors = [];
+      
+      ui.densityMapChooserDiv.querySelectorAll(".density-map-chooser").forEach(e => e.remove());
+      addDensityMap();
     }
   };
   ui.resetDensityBtn.addEventListener("click", resetDensity);
@@ -168,7 +189,6 @@ function initUI() {
     wfc.tilesetNeedsReload = true;
 
     resetDensity();
-    wfc.denseTiles = new Set();
 
     if (wfc.mode == "running") runSimulation();
     else
@@ -204,8 +224,9 @@ function initUI() {
   ui.tilesPreviewCanvas.addEventListener("mousedown", (e) => {
     if (!wfc.tileset) return;
     if (wfc.mode == "running") return;
+    if (wfc.densityMaps.length <= wfc.currentDensityMap) return;
 
-    ui.status.innerText = "Selecting dense tiles.";
+    ui.status.innerText = `Selecting dense tiles for map ${wfc.currentDensityMap}.`;
 
     const cols = Math.floor(Math.sqrt(wfc.tileset.size));
     const rows = Math.ceil(wfc.tileset.size / cols);
@@ -217,11 +238,12 @@ function initUI() {
 
     if (i >= wfc.tileset.size) return;
 
-
-    if (wfc.denseTiles.has(i))
-      wfc.denseTiles.delete(i);
+    const denseTiles = wfc.denseTilesPerMap[wfc.currentDensityMap];
+    console.log(denseTiles);
+    if (denseTiles.has(i))
+      denseTiles.delete(i);
     else
-      wfc.denseTiles.add(i);
+      denseTiles.add(i);
 
     updateTilesPreview();
   });
@@ -262,7 +284,7 @@ function initUI() {
 
 // ui helper functions
 function paintDensity(mouseX: number, mouseY: number) {
-  if (!wfc.densityMap) return;
+  if (wfc.densityMaps.length <= wfc.currentDensityMap) return;
 
   const n = parseInt(ui.outputSize.value);
   const brushSize = parseInt(ui.densityBrushRange.value);
@@ -285,10 +307,41 @@ function paintDensity(mouseX: number, mouseY: number) {
       if (dist > radius * radius) continue;
 
       const decay = 1 - (dist / (radius * radius));
-      const current = wfc.densityMap[y][x];
-      wfc.densityMap[y][x] = Math.min(1.0, current + intensity * decay);
+      const current = wfc.densityMaps[wfc.currentDensityMap][y][x];
+      wfc.densityMaps[wfc.currentDensityMap][y][x] = Math.min(1.0, current + intensity * decay);
     }
   }
+}
+function createNewDensityMap() {
+  const n = parseInt(ui.outputSize.value);
+  const id = wfc.densityMaps.length;
+
+  wfc.currentDensityMap = id;
+  wfc.densityMaps.push(Array.from({ length: n }, () => new Array(n).fill(0)));
+  wfc.denseTilesPerMap.push(new Set());
+  wfc.densityMapsColors.push(randomSRGBAColor());
+  ui.status.innerText = `New density map ${id} created.`;
+  
+  // remove other clicked statuses
+  const resetClicked = () => {
+    ui.densityMapChooserDiv.querySelectorAll(".density-map-chooser").forEach(btn => {
+      btn.classList.remove("clicked");
+    });
+  };
+  resetClicked();
+
+  const newBtn = document.createElement("button");
+  newBtn.innerText = `${wfc.currentDensityMap}`;
+  newBtn.classList.add("density-map-chooser", "secondary-btn", "clicked");
+  newBtn.addEventListener("click", () => {
+    wfc.currentDensityMap = id;
+    resetClicked();
+
+    newBtn.classList.add("clicked")
+    updateTilesPreview();
+  });
+
+  ui.densityMapChooserDiv.insertBefore(newBtn, ui.addDensityMapBtn);
 }
 
 function updateTilesPreview(): void {
@@ -304,13 +357,14 @@ function updateTilesPreview(): void {
     tilePreviewSize,
     tilePreviewScale,
     tilePreviewGap,
-    wfc.mode == "running" ? undefined : wfc.denseTiles,
+    wfc.mode === "running" ? undefined : wfc.denseTilesPerMap[wfc.currentDensityMap],
+    wfc.mode === "running" ? undefined : wfc.densityMapsColors[wfc.currentDensityMap],
   );
 
-  if (wfc.densityMap) {
+  if (wfc.densityMaps.length > 0) {
     const gridWidth = parseInt(ui.outputSize.value);
     const scale = (tilePreviewSize * (tilePreviewScale + tilePreviewGap)) / gridWidth;
-    previewMap(ui.densityPreviewCanvas, wfc.densityMap, scale);
+    previewMaps(ui.densityPreviewCanvas, wfc.densityMaps, wfc.densityMapsColors, scale);
   }
 }
 
@@ -394,7 +448,8 @@ async function runSimulation() {
   wfc.wave = new Wave(
     outputSize, outputSize, wfc.tileset,
     overlapping, heuristic, toroidal,
-    wfc.densityMap ? [wfc.densityMap] : undefined, [wfc.denseTiles]
+    wfc.densityMaps.length > 0 ? wfc.densityMaps : undefined,
+    wfc.denseTilesPerMap
   );
 
   const pipeline = initRenderPipeline(base);
@@ -433,14 +488,16 @@ async function editDensityMap() {
 
   const n = parseInt(ui.outputSize.value);
 
-  if (!wfc.densityMap || wfc.densityMap.length != n) {
-    wfc.densityMap = Array.from({ length: n }, () => new Array(n).fill(0));
+  if (wfc.densityMaps.length === 0 || wfc.densityMaps[0].length != n) {
+    createNewDensityMap();
   }
 
-  const encodeColor = (v: number) => {
+  const encodeColor = (mapIdx: number, v: number) => {
     const val = Math.min(1, Math.max(0, v));
-    return [val * 255, val * 255, val * 255, 255]; // black to white (rgba from 0 to 255)
-  }
+    const color = wfc.densityMapsColors[mapIdx];
+
+    return [val * color[0], val * color[1], val * color[2], color[3]];
+  };
 
   const colorBuffer = new Uint8ClampedArray(n * n * 4);
 
@@ -450,7 +507,10 @@ async function editDensityMap() {
     let idx = 0;
     for (let y = 0; y < n; ++y) {
       for (let x = 0; x < n; ++x) {
-        const [r, g, b, a] = encodeColor(wfc.densityMap![y][x]);
+        const value = wfc.densityMaps![wfc.currentDensityMap][y][x];
+        const [r, g, b, a] = encodeColor(wfc.currentDensityMap, value);
+        // console.log(`x: ${x}, y: ${y} => ${value}: (${r}, ${g}, ${b})`);
+
         colorBuffer[idx] = r;
         colorBuffer[idx + 1] = g;
         colorBuffer[idx + 2] = b;

@@ -70,7 +70,7 @@
         font-size: 1.0rem;
         font-weight: bold;
         margin-top: 20px;
-        transition: background 0.5s;
+        transition: background 0.1s;
       }
       button:hover { background-color: #0062a3; }
 
@@ -80,7 +80,7 @@
         border: 2px solid #007acc;
       }
 
-      button.secondary-btn:active {
+      button.secondary-btn:active, button.secondary-btn.clicked {
         background-color: #007acc;
         color: white;
         border: none;
@@ -88,6 +88,7 @@
 
       .canvas-wrapper {
         display: flex;
+        flex-direction: column;
         justify-content: center;
         align-items: center;
         background-image: radial-gradient(#2a2a2a 1px, transparent 1px);
@@ -119,12 +120,21 @@
         pointer-events: none;
       }
 
-      #preview-section, #preview-section div {
+      #preview-section, #preview-section > div {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         overflow-y: auto;
+      }
+
+      #density-map-chooser {
+        display: flex;
+        flex-direction: row;
+      }
+
+      #density-map-chooser button {
+        margin-right: 4px;
       }
     </style>
   </head>
@@ -208,6 +218,11 @@
           <h2></h2>
           <div class="canvas-wrapper">
             <canvas id="preview-canvas"></canvas>
+
+            <div id="density-map-chooser">
+              <!-- buttons to choose the map injected here -->
+              <button id="add-density-map-btn">+</button>
+            </div>
           </div>
         </div>
 
