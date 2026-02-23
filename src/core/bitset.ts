@@ -81,4 +81,8 @@ export class Bitset implements Iterable<number> {
     for (let i = 0; i < this.size; ++i)
       if (this.getBit(i)) yield i;
   }
+
+  static fromBits(b: Bitset): Bitset {
+    return new Bitset(b.size, false, b.data);
+  }
 }

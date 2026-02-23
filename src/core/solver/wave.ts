@@ -25,6 +25,7 @@ export class Wave {
   consideringDensity: boolean;
   densityMap?: number[][];
   denseTiles?: Bitset;
+  unvisitedDenseCells?: Bitset;
 
   // propagation data structures
   propagationStack: [cell: number, tile: number][];
@@ -66,6 +67,7 @@ export class Wave {
     if (this.consideringDensity) {
       this.densityMap = densityMap!;
       this.denseTiles = new Bitset(tileset.size);
+      this.unvisitedDenseCells = new Bitset(this.waveSize);
 
       for (const tile of denseTiles!) {
         this.denseTiles.setBit(tile);
@@ -100,14 +102,23 @@ export class Wave {
 
   chooseNextCell(): number {
     const ksize = this.tileset.tileSize;
+    const unvisitedDenseCount = this.consideringDensity ? this.unvisitedDenseCells!.count() : 0;
+    const visitDense = (i: number) => {
+      if (this.consideringDensity) this.unvisitedDenseCells!.unsetBit(i);
+    };
 
     if (this.heuristic == "SCANLINE") {
       for (let i = 0; i < this.waveSize; ++i) {
         // check if overlapping block can be placed
         if (this.overlapping && !this.toroidal) {
-          if (this.wave[i].pos.x + ksize > this.width || this.wave[i].pos.y + ksize > this.height)
+          if (this.wave[i].pos.x + ksize > this.width || this.wave[i].pos.y + ksize > this.height) {
+            visitDense(i);
             continue;
+          }
         }
+
+        if (unvisitedDenseCount > 0 && !this.unvisitedDenseCells!.getBit(i)) continue;
+        visitDense(i);
 
         if (!this.wave[i].isCollapsed) return i;
       }
@@ -120,9 +131,13 @@ export class Wave {
       for (let i = 0; i < this.waveSize; ++i) {
         // check if overlapping block can be placed
         if (this.overlapping && !this.toroidal) {
-          if (this.wave[i].pos.x + ksize > this.width || this.wave[i].pos.y + ksize > this.height)
+          if (this.wave[i].pos.x + ksize > this.width || this.wave[i].pos.y + ksize > this.height) {
+            visitDense(i);
             continue;
+          }
         }
+
+        if (unvisitedDenseCount > 0 && !this.unvisitedDenseCells!.getBit(i)) continue;
 
         if (!this.wave[i].isCollapsed) {
           const noise = Math.random() * 1e-6;
@@ -132,9 +147,10 @@ export class Wave {
             minEntropy = entropy;
             minIdx = i;
           }
-        }
+        } else visitDense(i);
       }
 
+      visitDense(minIdx);
       return minIdx;
     }
 
@@ -225,6 +241,16 @@ export class Wave {
       for (let tile = 0; tile < this.tileset.size; ++tile) {
         for (let dir = 0; dir < 4; ++dir) {
           this.supporters[cell][tile][dir] = this.tileset.allowedNeighbors[dir][tile].count();
+        }
+      }
+    }
+
+    if (this.consideringDensity) {
+      for (let y = 0; y < this.height; ++y) {
+        for (let x = 0; x < this.width; ++x) {
+          if (this.densityMap![y][x] != 0) {
+            this.unvisitedDenseCells!.setBit(idx(y, x, this.height));
+          }
         }
       }
     }
