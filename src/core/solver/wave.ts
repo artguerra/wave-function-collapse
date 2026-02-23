@@ -23,8 +23,8 @@ export class Wave {
 
   // density control
   consideringDensity: boolean;
-  densityMap?: number[][];
-  denseTiles?: Bitset;
+  densityMaps?: number[][][];
+  denseTilesPerMap?: Bitset[];
   unvisitedDenseCells?: Bitset;
 
   // propagation data structures
@@ -36,8 +36,8 @@ export class Wave {
     tileset: Tileset, overlapping: boolean,
     heuristic: Heuristic = "ENTROPY",
     toroidal: boolean = false,
-    densityMap?: number[][],
-    denseTiles?: Set<number>
+    densityMaps?: number[][][],
+    denseTilesPerMap?: Set<number>[]
   ) {
     this.overlapping = overlapping;
     this.heuristic = heuristic;
@@ -62,15 +62,19 @@ export class Wave {
       this.totalWeightLogWeightsSum += freq * Math.log(freq);
     }
 
-    this.consideringDensity = densityMap !== undefined && denseTiles !== undefined;
+    this.consideringDensity = densityMaps !== undefined && denseTilesPerMap !== undefined;
 
     if (this.consideringDensity) {
-      this.densityMap = densityMap!;
-      this.denseTiles = new Bitset(tileset.size);
+      this.densityMaps = densityMaps!;
+      this.denseTilesPerMap = Array.from(
+        { length: denseTilesPerMap!.length }, () => new Bitset(tileset.size)
+      );
       this.unvisitedDenseCells = new Bitset(this.waveSize);
 
-      for (const tile of denseTiles!) {
-        this.denseTiles.setBit(tile);
+      for (let i = 0; i < denseTilesPerMap!.length; ++i) {
+        for (const tile of denseTilesPerMap![i]) {
+         this.denseTilesPerMap[i].setBit(tile);
+        }
       }
     }
 
@@ -160,15 +164,18 @@ export class Wave {
   observe(cellIdx: number): boolean {
     const cell = this.wave[cellIdx];
 
-    let density: number | undefined = undefined;
+    let densities: number[] | undefined = undefined;
     if (this.consideringDensity) {
       const x = cell.pos.x;
       const y = cell.pos.y;
 
-      density = this.densityMap![y][x];
+      densities = new Array(this.densityMaps!.length);
+      for (let i = 0; i < this.densityMaps!.length; ++i) {
+        densities[i] = this.densityMaps![i][y][x];
+      }
     }
 
-    const chosenTile = cell.chooseRandomTile(density, this.denseTiles);
+    const chosenTile = cell.chooseRandomTile(densities, this.denseTilesPerMap, true);
 
     if (chosenTile == -1) return false;
 
@@ -246,11 +253,13 @@ export class Wave {
     }
 
     if (this.consideringDensity) {
-      for (let y = 0; y < this.height; ++y) {
-        for (let x = 0; x < this.width; ++x) {
-          if (this.densityMap![y][x] != 0) {
-            this.unvisitedDenseCells!.setBit(idx(y, x, this.height));
-          }
+      for (let i = 0; i < this.densityMaps!.length; ++i) {
+        for (let y = 0; y < this.height; ++y) {
+         for (let x = 0; x < this.width; ++x) {
+           if (this.densityMaps![i][y][x] != 0) {
+             this.unvisitedDenseCells!.setBit(idx(y, x, this.height));
+           }
+         }
         }
       }
     }

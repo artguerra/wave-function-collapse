@@ -394,7 +394,7 @@ async function runSimulation() {
   wfc.wave = new Wave(
     outputSize, outputSize, wfc.tileset,
     overlapping, heuristic, toroidal,
-    wfc.densityMap ?? undefined, wfc.denseTiles
+    wfc.densityMap ? [wfc.densityMap] : undefined, [wfc.denseTiles]
   );
 
   const pipeline = initRenderPipeline(base);

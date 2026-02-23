@@ -43,9 +43,11 @@ export class Cell {
   }
 
   // choose at random one of the remaining states, considering tileset frequencies
-  chooseRandomTile(density?: number, denseTiles?: Bitset): number {
+  chooseRandomTile(densities?: number[], denseTilesPerMap?: Bitset[], strict?: boolean): number {
+    const usingDensity = densities !== undefined && denseTilesPerMap;
     const currentFrequencies: number[] = [];
-    let sumFrequencies = 0;
+    const freqIsDense = new Bitset(this.possibleStates.size);
+    let sumFrequencies = 0, sumDenseFreqs = 0;
 
     for (const [idx, possible] of this.possibleStates.bits()) {
       if (!possible) {
@@ -55,13 +57,24 @@ export class Cell {
 
       let freq = this.tileset.frequencies[idx];
 
-      if (density !== undefined && denseTiles) {
-        const isDense = denseTiles.getBit(idx);
-
+      if (usingDensity) {
         const STRENGTH = 100; 
 
-        if (isDense) {
-           freq += density * STRENGTH;
+        let isDenseInAny = false;
+        for (let i = 0; i < densities.length; ++i) {
+          const density = densities[i];
+          const isDense = density > 0 && denseTilesPerMap[i].getBit(idx);
+
+          isDenseInAny ||= isDense;
+
+          if (isDense) {
+            freq += density * STRENGTH;
+          }
+        }
+
+        if (isDenseInAny) {
+          sumDenseFreqs += freq;
+          freqIsDense.setBit(idx);
         }
       }
 
@@ -69,13 +82,15 @@ export class Cell {
       sumFrequencies += freq;
     }
 
-    if (sumFrequencies == 0) return -1;
+    if (sumFrequencies === 0) return -1; // no tiles allowed remaining
+    if (sumDenseFreqs === 0) strict = false; // allow all options if no density constraints
 
-    const threshold = Math.random() * sumFrequencies;    
+    const threshold = Math.random() * (usingDensity && strict ? sumDenseFreqs : sumFrequencies);
 
     let currentSum = 0;
     for (let i = 0; i < currentFrequencies.length; ++i) {
-      currentSum += currentFrequencies[i];
+      if (!usingDensity || !strict || freqIsDense.getBit(i))
+        currentSum += currentFrequencies[i];
 
       if (currentSum >= threshold) return i;
     }
