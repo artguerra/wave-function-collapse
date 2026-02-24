@@ -2,7 +2,7 @@ import { createOverlappingTileset } from "@/io/overlapping";
 import { createStmTileset } from "@/io/stm";
 import { randomSRGBAColor } from "@/utils";
 import { idx } from "@/utils/grid";
-import { previewBlocks, previewMaps } from "@/utils/image";
+import { previewBlocks, previewMaps, renderFlowArrows } from "@/utils/image";
 import type { RGBA, SymmetryMode, Vec2 } from "@/core/types";
 import { Wave } from "@/core/solver/wave";
 import {
@@ -49,6 +49,7 @@ let pan: Vec2 = { x: 0, y: 0 };
 
 // ui references
 const ui = {
+  // general
   modelSelect: document.querySelector("#model-select") as HTMLSelectElement,
   imgSelect: document.querySelector("#img-select") as HTMLSelectElement,
   outputSize: document.querySelector("#output-size") as HTMLInputElement,
@@ -59,19 +60,30 @@ const ui = {
   speedRange: document.querySelector("#speed-range") as HTMLInputElement,
   speedVal: document.querySelector("#speed-val") as HTMLSpanElement,
   restartBtn: document.querySelector("#restart-btn") as HTMLButtonElement,
-  densityEditBtn: document.querySelector("#density-edit-btn") as HTMLButtonElement,
-  resetDensityBtn: document.querySelector("#reset-density-btn") as HTMLButtonElement,
-  densityBrushRange: document.querySelector("#density-brush") as HTMLButtonElement,
   status: document.querySelector("#status") as HTMLElement,
   canvas: document.querySelector("#main-canvas") as HTMLCanvasElement,
+
+  // previews
+  previewSidebar: document.querySelector("#preview-section") as HTMLDivElement,
   previewTilesCheck: document.querySelector("#preview-tiles-check") as HTMLInputElement,
   previewMapsCheck: document.querySelector("#preview-maps-check") as HTMLInputElement,
   tilesPreviewSection: document.querySelector("#tiles-preview") as HTMLDivElement,
   tilesPreviewCanvas: document.querySelector("#preview-canvas") as HTMLCanvasElement,
   mapsPreviewsSection: document.querySelector("#maps-previews") as HTMLDivElement,
+
+  // density
+  densityEditBtn: document.querySelector("#density-edit-btn") as HTMLButtonElement,
+  resetDensityBtn: document.querySelector("#reset-density-btn") as HTMLButtonElement,
+  densityBrushRange: document.querySelector("#density-brush") as HTMLButtonElement,
   densityPreviewCanvas: document.querySelector("#density-preview-canvas") as HTMLCanvasElement,
   densityMapChooserDiv: document.querySelector("#density-map-chooser") as HTMLDivElement,
   addDensityMapBtn: document.querySelector("#add-density-map-btn") as HTMLButtonElement,
+
+  // flow
+  flowEditBtn: document.querySelector("#flow-edit-btn") as HTMLButtonElement,
+  resetFlowBtn: document.querySelector("#reset-flow-btn") as HTMLButtonElement,
+  flowPreviewCanvas: document.querySelector("#flow-preview-canvas") as HTMLCanvasElement,
+  flowOverlayCanvas: document.querySelector("#flow-overlay-canvas") as HTMLCanvasElement,
 };
 
 // WFC global references
@@ -85,6 +97,9 @@ interface State {
   densityMapsColors: RGBA[],
   currentDensityMap: number;
 
+  flowMap: Vec2[][];  
+  floorTile: number;
+
   tilesetNeedsReload: boolean;
 };
 
@@ -92,10 +107,15 @@ const wfc: State = {
   mode: "running",
   tileset: null,
   wave: null,
+
   densityMaps: [],
   denseTilesPerMap: [],
   densityMapsColors: [],
   currentDensityMap: 0,
+
+  flowMap: [],
+  floorTile: -1,
+
   tilesetNeedsReload: true,
 };
 
@@ -124,13 +144,19 @@ function initUI() {
   const setPreviewDisplay = () => {
     updateTilesPreview();
 
-    ui.tilesPreviewSection.style.display = ui.previewTilesCheck.checked ? "flex" : "none";
-    ui.mapsPreviewsSection.style.display = ui.previewMapsCheck.checked ? "flex" : "none";
+    const previewTiles = ui.previewTilesCheck.checked;
+    const previewMaps = ui.previewMapsCheck.checked;
+    ui.previewSidebar.style.display = previewTiles || previewMaps ? "flex" : "none";
+    ui.tilesPreviewSection.style.display = previewTiles ? "flex" : "none";
+    ui.mapsPreviewsSection.style.display = previewMaps ? "flex" : "none";
     ui.densityMapChooserDiv.style.display = wfc.mode === "density-edit" ? "flex" : "none";
+    ui.flowOverlayCanvas.style.display = wfc.mode === "flow-edit" ? "block" : "none";
 
     if (wfc.mode === "density-edit")
       ui.tilesPreviewSection.querySelector("h2")!.innerText = "Select tiles to densen:";
-    else
+    else if (wfc.mode === "flow-edit")
+      ui.tilesPreviewSection.querySelector("h2")!.innerText = "Select floor tile:";
+    else if (wfc.mode === "running")
       ui.tilesPreviewSection.querySelector("h2")!.innerText = "Extracted tiles:";
   };
 
@@ -143,6 +169,7 @@ function initUI() {
     wfc.mode = "running";
 
     if (wfc.densityMaps.length > 0) ui.previewMapsCheck.checked = true;
+    if (wfc.flowMap.length > 0 && wfc.floorTile !== -1) ui.previewMapsCheck.checked = true;
 
     setPreviewDisplay();
     runSimulation();
@@ -184,11 +211,37 @@ function initUI() {
   };
   ui.resetDensityBtn.addEventListener("click", resetDensity);
 
+  // flow edit
+  ui.flowEditBtn.addEventListener("click", () => {
+    wfc.mode = "flow-edit";
+    currentCancelToken.cancelled = true;
+
+    ui.status.innerText = "Entered flow map editing mode.";
+    ui.previewTilesCheck.checked = true;
+    ui.previewMapsCheck.checked = false;
+    setPreviewDisplay();
+
+    editFlowMap();
+  });
+
+  const resetFlow = () => {
+    const n = parseInt(ui.outputSize.value);
+
+    wfc.flowMap = Array.from({ length: n }, () => 
+      Array.from({ length: n }, () => ({ x: 0, y: 0 }))
+    );
+    wfc.floorTile = -1;
+
+    ui.status.innerText = "Flow map reset.";
+  };
+  ui.resetFlowBtn.addEventListener("click", resetFlow);
+
   // resets to be done when image changes
   const resetTileset = () => {
     wfc.tilesetNeedsReload = true;
 
     resetDensity();
+    resetFlow();
 
     if (wfc.mode == "running") runSimulation();
     else
@@ -219,14 +272,14 @@ function initUI() {
     resetTileset();
   });
 
-
   // mouse events
   ui.tilesPreviewCanvas.addEventListener("mousedown", (e) => {
     if (!wfc.tileset) return;
-    if (wfc.mode == "running") return;
-    if (wfc.densityMaps.length <= wfc.currentDensityMap) return;
+    if (wfc.mode === "running") return;
+    if (wfc.mode === "density-edit" && wfc.densityMaps.length <= wfc.currentDensityMap) return;
 
-    ui.status.innerText = `Selecting dense tiles for map ${wfc.currentDensityMap}.`;
+    if (wfc.mode === "density-edit")
+      ui.status.innerText = `Selecting dense tiles for map ${wfc.currentDensityMap}.`;
 
     const cols = Math.floor(Math.sqrt(wfc.tileset.size));
     const rows = Math.ceil(wfc.tileset.size / cols);
@@ -238,12 +291,16 @@ function initUI() {
 
     if (i >= wfc.tileset.size) return;
 
-    const denseTiles = wfc.denseTilesPerMap[wfc.currentDensityMap];
-    console.log(denseTiles);
-    if (denseTiles.has(i))
-      denseTiles.delete(i);
-    else
-      denseTiles.add(i);
+    if (wfc.mode === "density-edit") {
+      const denseTiles = wfc.denseTilesPerMap[wfc.currentDensityMap];
+      if (denseTiles.has(i))
+        denseTiles.delete(i);
+      else
+        denseTiles.add(i);
+    } else if (wfc.mode === "flow-edit") {
+      wfc.floorTile = i;
+      ui.status.innerText = `Floor tile selected.`;
+    }
 
     updateTilesPreview();
   });
@@ -257,9 +314,11 @@ function initUI() {
     lastX = e.clientX;
     lastY = e.clientY;
 
-    if (wfc.mode != "running") {
+    if (wfc.mode === "density-edit") {
       ui.status.innerText = "Editing density map."
-      paintDensity(e.offsetX, e.offsetY);
+      paintMap("density", e.offsetX, e.offsetY);
+    } else if (wfc.mode === "flow-edit") {
+      ui.status.innerText = "Editing flow map."
     }
   });
 
@@ -268,7 +327,7 @@ function initUI() {
   ui.canvas.addEventListener("mousemove", e => {
     if (!isDragging || !gpuApp) return;
 
-    if (wfc.mode == "running") {
+    if (wfc.mode === "running") {
       pan.x += e.clientX - lastX;
       pan.y += e.clientY - lastY;
 
@@ -276,15 +335,29 @@ function initUI() {
 
       lastX = e.clientX;
       lastY = e.clientY;
-    } else {
-      paintDensity(e.offsetX, e.offsetY);
+    } else if (wfc.mode === "density-edit") {
+      paintMap("density", e.offsetX, e.offsetY);
+    } else if (wfc.mode === "flow-edit") {
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > 2) {
+        paintMap("flow", e.offsetX, e.offsetY, dx / dist, dy / dist);
+        lastX = e.clientX;
+        lastY = e.clientY;
+      }
     }
   });
 }
 
 // ui helper functions
-function paintDensity(mouseX: number, mouseY: number) {
-  if (wfc.densityMaps.length <= wfc.currentDensityMap) return;
+function paintMap(
+  mode: "density" | "flow", mouseX: number, mouseY: number,
+  dirX?: number, dirY?: number
+) {
+  if (mode === "density" && wfc.densityMaps.length <= wfc.currentDensityMap) return;
 
   const n = parseInt(ui.outputSize.value);
   const brushSize = parseInt(ui.densityBrushRange.value);
@@ -306,12 +379,27 @@ function paintDensity(mouseX: number, mouseY: number) {
       const dist = (x - gridX) * (x - gridX) + (y - gridY) * (y - gridY);
       if (dist > radius * radius) continue;
 
-      const decay = 1 - (dist / (radius * radius));
-      const current = wfc.densityMaps[wfc.currentDensityMap][y][x];
-      wfc.densityMaps[wfc.currentDensityMap][y][x] = Math.min(1.0, current + intensity * decay);
+      if (mode === "density") {
+        const decay = 1 - (dist / (radius * radius));
+        const current = wfc.densityMaps[wfc.currentDensityMap][y][x];
+        wfc.densityMaps[wfc.currentDensityMap][y][x] = Math.min(1.0, current + intensity * decay);
+      } else if (mode === "flow") {
+        const cell = wfc.flowMap[y][x];
+        
+        // interpolate current cell dir and new brush dir
+        let nx = cell.x * (1 - intensity) + dirX! * intensity;
+        let ny = cell.y * (1 - intensity) + dirY! * intensity;
+        
+        // normalize the vector
+        const len = Math.sqrt(nx * nx + ny * ny);
+        if (len > 0) {
+          wfc.flowMap[y][x] = { x: nx / len, y: ny / len };
+        }
+      }
     }
   }
 }
+
 function createNewDensityMap() {
   const n = parseInt(ui.outputSize.value);
   const id = wfc.densityMaps.length;
@@ -357,14 +445,20 @@ function updateTilesPreview(): void {
     tilePreviewSize,
     tilePreviewScale,
     tilePreviewGap,
-    wfc.mode === "running" ? undefined : wfc.denseTilesPerMap[wfc.currentDensityMap],
-    wfc.mode === "running" ? undefined : wfc.densityMapsColors[wfc.currentDensityMap],
+    wfc.mode === "density-edit" ? wfc.denseTilesPerMap[wfc.currentDensityMap] : undefined,
+    wfc.mode === "density-edit" ? wfc.densityMapsColors[wfc.currentDensityMap] : undefined,
+    wfc.mode === "flow-edit" ? wfc.floorTile : undefined,
   );
 
+  const gridWidth = parseInt(ui.outputSize.value);
+  const scale = (tilePreviewSize * (tilePreviewScale + tilePreviewGap)) / gridWidth;
+
   if (wfc.densityMaps.length > 0) {
-    const gridWidth = parseInt(ui.outputSize.value);
-    const scale = (tilePreviewSize * (tilePreviewScale + tilePreviewGap)) / gridWidth;
     previewMaps(ui.densityPreviewCanvas, wfc.densityMaps, wfc.densityMapsColors, scale);
+  }
+
+  if (wfc.flowMap && wfc.flowMap.length > 0) {
+    renderFlowArrows(ui.flowPreviewCanvas, wfc.flowMap, { fillBackground: true, fixedScale: scale });
   }
 }
 
@@ -520,6 +614,31 @@ async function editDensityMap() {
     }
 
     updateTexture(gpuApp!, colorBuffer);
+    requestAnimationFrame(frame);
+  };
+
+  requestAnimationFrame(frame);
+}
+
+async function editFlowMap() {
+  const base = await initGPU();
+  if (!base) return;
+
+  const pipeline = initRenderPipeline(base);
+  gpuApp = initGPUBuffers(pipeline, true);
+
+  const n = parseInt(ui.outputSize.value);
+
+  if (wfc.flowMap.length === 0 || wfc.flowMap.length !== n) {
+    wfc.flowMap = Array.from({ length: n }, () => 
+      Array.from({ length: n }, () => ({ x: 0, y: 0 }))
+    );
+  }
+
+  const frame = () => {
+    if (wfc.mode !== "flow-edit" || !gpuApp) return;
+
+    renderFlowArrows(ui.flowOverlayCanvas, wfc.flowMap, {}, ui.canvas);
     requestAnimationFrame(frame);
   };
 

@@ -1,7 +1,7 @@
 import { assert } from "@/utils";
 import { idx } from "@/utils/grid";
 import { PixelBlock } from "@/core/pixels";
-import type { PixelData, RGBA } from "@/core/types";
+import type { PixelData, RGBA, Vec2 } from "@/core/types";
 
 type PngResponse = {
   width: number;
@@ -118,6 +118,7 @@ export function previewBlocks(
   gap = 2,
   selectedIndices?: Set<number>,
   selectedIndicesColor?: RGBA,
+  singleIndexSelected?: number,
 ) {
   if (blocks.length === 0) return;
 
@@ -175,6 +176,14 @@ export function previewBlocks(
       ctx.strokeRect(dx + 1.5, dy + 1.5, tileDrawSize - 3, tileDrawSize - 3);
       
       ctx.fillStyle = `${hexColor}40`;
+      ctx.fillRect(dx, dy, tileDrawSize, tileDrawSize);
+    }
+
+    if (singleIndexSelected !== undefined && singleIndexSelected === i) {
+      ctx.strokeStyle = "#FF6347";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(dx + 1.5, dy + 1.5, tileDrawSize - 3, tileDrawSize - 3);
+      ctx.fillStyle = `${ctx.strokeStyle}40`;
       ctx.fillRect(dx, dy, tileDrawSize, tileDrawSize);
     }
   }
@@ -248,4 +257,88 @@ export function previewMaps(
     off as unknown as CanvasImageSource, 0, 0,
     cols * scale, rows * scale,
   );
+}
+
+export function renderFlowArrows(
+  canvas: HTMLCanvasElement, 
+  flowMap: Vec2[][], 
+  options: { fillBackground?: boolean, fixedScale?: number } = {},
+  overlayedCanvas?: HTMLCanvasElement,
+) {
+  const n = flowMap.length;
+  if (n === 0) return;
+
+  let cellW, cellH;
+  if (options.fixedScale) {
+    canvas.width = n * options.fixedScale;
+    canvas.height = n * options.fixedScale;
+    cellW = options.fixedScale;
+    cellH = options.fixedScale;
+  } else {
+    const rect = overlayedCanvas!.getBoundingClientRect(); // overlayed canvas
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    cellW = canvas.width / n;
+    cellH = canvas.height / n;
+  }
+
+  const ctx = canvas.getContext("2d")!;
+  
+  if (options.fillBackground) {
+    ctx.fillStyle = "#1e1e1e";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  ctx.strokeStyle = "#007acc";
+  ctx.lineWidth = options.fixedScale ? 1.5 : 2.5;
+
+  const scale = Math.min(cellW, cellH);
+
+  for (let y = 0; y < n; ++y) {
+    for (let x = 0; x < n; ++x) {
+      const flow = flowMap[y][x];
+      const mag = Math.sqrt(flow.x * flow.x + flow.y * flow.y);
+      
+      const cx = x * cellW + cellW / 2;
+      const cy = y * cellH + cellH / 2;
+
+      // draw dot for empty flow
+      if (mag < 0.1) {
+        ctx.fillStyle = "#555";
+        ctx.beginPath();
+        ctx.arc(cx, cy, scale * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
+
+      // draw arrow line
+      const arrowLen = (scale * 0.4) * mag; 
+      const endX = cx + flow.x * arrowLen;
+      const endY = cy + flow.y * arrowLen;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+
+      // arrow head
+      const headlen = scale * 0.25;
+      const angle = Math.atan2(flow.y, flow.x);
+      
+      ctx.beginPath();
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(
+        endX - headlen * Math.cos(angle - Math.PI / 6), 
+        endY - headlen * Math.sin(angle - Math.PI / 6)
+      );
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(
+        endX - headlen * Math.cos(angle + Math.PI / 6), 
+        endY - headlen * Math.sin(angle + Math.PI / 6)
+      );
+      ctx.stroke();
+    }
+  }
 }

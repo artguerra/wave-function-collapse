@@ -19,15 +19,18 @@ export class Tileset {
 
   constructor(
     tileSize: number,
-    tiles: Tile[],
+    tiles: Omit<Tile, "dirStrength">[],
     weights: number[],
     allowed: [Bitset[], Bitset[], Bitset[], Bitset[]],
   ) {
+    computeTilesDirections(tiles, allowed, 2);
+
     this.tileSize = tileSize;
     this.tiles = tiles;
     this.size = tiles.length;
     this.allowedNeighbors = allowed;
     this.frequencies = new Float32Array(weights);
+
 
     // calculate average color
     const avgColorSum = [0, 0, 0, 0];
@@ -46,5 +49,33 @@ export class Tileset {
       }
     }
   }
+
 }
 
+function computeTilesDirections(
+  tiles: Partial<Tile>[],
+  allowedNeighbors: [Bitset[], Bitset[], Bitset[], Bitset[]],
+  floorTileIdx: number
+): asserts tiles is Tile[] {
+  for (let i = 0; i < tiles.length; ++i) {
+    const strengths: [number, number, number, number] = [0, 0, 0, 0];
+    let neighCount = 0;
+
+    for (let d = 0; d < 4; ++d) {
+      const neighbors = allowedNeighbors[d][i];
+      if (neighbors.getBit(floorTileIdx)) continue;
+
+      const neighsInDir = neighbors.count();
+      strengths[d] += neighsInDir;
+
+      neighCount += neighsInDir;
+    }
+
+    if (neighCount > 0) {
+      strengths[0] /= neighCount; strengths[1] /= neighCount;
+      strengths[2] /= neighCount; strengths[3] /= neighCount;
+    }
+
+    tiles[i].dirStrength = strengths;
+  }
+}

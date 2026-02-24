@@ -91,9 +91,12 @@
         flex-direction: column;
         justify-content: center;
         align-items: center;
+        position: relative;
+      }
+
+      .dotted-bg {
         background-image: radial-gradient(#2a2a2a 1px, transparent 1px);
         background-size: 20px 20px;
-        position: relative;
       }
 
       canvas {
@@ -109,6 +112,12 @@
         flex-grow: 1;
       }
 
+      #flow-overlay-canvas {
+        position: absolute;
+        pointer-events: none;
+        display: none;
+      }
+
       #status {
         position: absolute;
         bottom: 20px;
@@ -120,12 +129,29 @@
         pointer-events: none;
       }
 
+      #preview-section {
+        width: 300px;
+        min-width: 300px;
+        border-left: 1px solid #3e3e42;
+        margin-bottom: 15px;
+        margin-top: 15px;
+      }
+
       #preview-section, #preview-section > div {
-        display: flex;
         flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        overflow-y: auto;
+        text-align: center;
+        min-height: 0;
+      }
+
+      #preview-section .canvas-wrapper {
+        min-height: 0;
+        width: 100%;
+      }
+
+      #preview-section canvas {
+        max-width: 95%;
+        max-height: 95%;
+        object-fit: contain;
       }
 
       #density-map-chooser {
@@ -200,16 +226,27 @@
         </div>
 
         <div>
-          <h2>Density editing</h2>
+          <h1>Control maps editing</h1>
           <label for="density-brush">Brush size:</label>
           <input type="range" id="density-brush" min="1" max="25" value="1">
+        </div>
+
+        <div>
+          <h2>Density editing</h2>
           <button id="density-edit-btn">EDIT DENSITY MAP</button>
           <button id="reset-density-btn" class="secondary-btn">RESET DENSITY</button>
         </div>
+
+        <div>
+          <h2>Flow editing</h2>
+          <button id="flow-edit-btn">EDIT FLOW MAP</button>
+          <button id="reset-flow-btn" class="secondary-btn">RESET FLOW</button>
+        </div>
       </div>
 
-      <div id="main-canvas-wrapper" class="canvas-wrapper">
+      <div id="main-canvas-wrapper" class="canvas-wrapper dotted-bg">
         <canvas id="main-canvas"></canvas>
+        <canvas id="flow-overlay-canvas"></canvas>
         <div id="status">Ready</div>
       </div>
 
@@ -230,6 +267,11 @@
           <h2>Density map:</h2>
           <div class="canvas-wrapper">
             <canvas id="density-preview-canvas"></canvas>
+          </div>
+
+          <h2>Flow map:</h2>
+          <div class="canvas-wrapper">
+            <canvas id="flow-preview-canvas"></canvas>
           </div>
         </div>
       </div>
