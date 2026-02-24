@@ -13,7 +13,7 @@ export interface PixelData {
 
 export interface Tile {
   id: number;
-  dirStrength: [number, number, number, number];
+  dirStrength?: [number, number, number, number];
   pixels: PixelData;
 }
 

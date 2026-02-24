@@ -5,6 +5,8 @@ export class Tileset {
   readonly size: number;
   readonly tileSize: number;
   readonly tiles: Tile[];
+  tileDirectionsComputed: boolean;
+
   readonly allowedNeighbors: [
     Bitset[], // W
     Bitset[], // N
@@ -19,18 +21,16 @@ export class Tileset {
 
   constructor(
     tileSize: number,
-    tiles: Omit<Tile, "dirStrength">[],
+    tiles: Tile[],
     weights: number[],
     allowed: [Bitset[], Bitset[], Bitset[], Bitset[]],
   ) {
-    computeTilesDirections(tiles, allowed, 2);
-
     this.tileSize = tileSize;
     this.tiles = tiles;
+    this.tileDirectionsComputed = false;
     this.size = tiles.length;
     this.allowedNeighbors = allowed;
     this.frequencies = new Float32Array(weights);
-
 
     // calculate average color
     const avgColorSum = [0, 0, 0, 0];
@@ -50,13 +50,18 @@ export class Tileset {
     }
   }
 
+  updateTileDirections(floorTile: number) {
+    computeTilesDirections(this.tiles, this.allowedNeighbors, floorTile);
+    this.tileDirectionsComputed = true;
+  }
+
 }
 
 function computeTilesDirections(
   tiles: Partial<Tile>[],
   allowedNeighbors: [Bitset[], Bitset[], Bitset[], Bitset[]],
   floorTileIdx: number
-): asserts tiles is Tile[] {
+) {
   for (let i = 0; i < tiles.length; ++i) {
     const strengths: [number, number, number, number] = [0, 0, 0, 0];
     let neighCount = 0;

@@ -299,6 +299,7 @@ function initUI() {
         denseTiles.add(i);
     } else if (wfc.mode === "flow-edit") {
       wfc.floorTile = i;
+      wfc.tileset.updateTileDirections(i);
       ui.status.innerText = `Floor tile selected.`;
     }
 
@@ -448,6 +449,7 @@ function updateTilesPreview(): void {
     wfc.mode === "density-edit" ? wfc.denseTilesPerMap[wfc.currentDensityMap] : undefined,
     wfc.mode === "density-edit" ? wfc.densityMapsColors[wfc.currentDensityMap] : undefined,
     wfc.mode === "flow-edit" ? wfc.floorTile : undefined,
+    wfc.tileset.tileDirectionsComputed ? wfc.tileset.tiles.map(t => t.dirStrength!) : undefined,
   );
 
   const gridWidth = parseInt(ui.outputSize.value);
@@ -543,7 +545,8 @@ async function runSimulation() {
     outputSize, outputSize, wfc.tileset,
     overlapping, heuristic, toroidal,
     wfc.densityMaps.length > 0 ? wfc.densityMaps : undefined,
-    wfc.denseTilesPerMap
+    wfc.denseTilesPerMap.length > 0 ? wfc.denseTilesPerMap: undefined,
+    wfc.flowMap.length > 0 && wfc.tileset.tileDirectionsComputed ? wfc.flowMap : undefined,
   );
 
   const pipeline = initRenderPipeline(base);
@@ -603,7 +606,6 @@ async function editDensityMap() {
       for (let x = 0; x < n; ++x) {
         const value = wfc.densityMaps![wfc.currentDensityMap][y][x];
         const [r, g, b, a] = encodeColor(wfc.currentDensityMap, value);
-        // console.log(`x: ${x}, y: ${y} => ${value}: (${r}, ${g}, ${b})`);
 
         colorBuffer[idx] = r;
         colorBuffer[idx + 1] = g;

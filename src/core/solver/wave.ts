@@ -27,6 +27,11 @@ export class Wave {
   denseTilesPerMap?: Bitset[];
   unvisitedDenseCells?: Bitset;
 
+  // flow control
+  consideringFlow: boolean;
+  flowMap?: Vec2[][];
+  unvisitedFlowCells?: Bitset;
+
   // propagation data structures
   propagationStack: [cell: number, tile: number][];
   supporters: number[][][]; // how many supporters a specific tile in a specific cell has in each direction
@@ -37,7 +42,8 @@ export class Wave {
     heuristic: Heuristic = "ENTROPY",
     toroidal: boolean = false,
     densityMaps?: number[][][],
-    denseTilesPerMap?: Set<number>[]
+    denseTilesPerMap?: Set<number>[],
+    flowMap?: Vec2[][],
   ) {
     this.overlapping = overlapping;
     this.heuristic = heuristic;
@@ -78,6 +84,12 @@ export class Wave {
       }
     }
 
+    this.consideringFlow = flowMap !== undefined;
+    if (this.consideringFlow) {
+      this.flowMap = flowMap!;
+      this.unvisitedFlowCells = new Bitset(this.waveSize);
+    }
+
     this.reset();
   }
 
@@ -107,23 +119,33 @@ export class Wave {
   chooseNextCell(): number {
     const ksize = this.tileset.tileSize;
     const unvisitedDenseCount = this.consideringDensity ? this.unvisitedDenseCells!.count() : 0;
-    const visitDense = (i: number) => {
+    const unvisitedFlowCount = this.consideringFlow ? this.unvisitedFlowCells!.count() : 0;
+
+    const visitMapped = (i: number) => {
       if (this.consideringDensity) this.unvisitedDenseCells!.unsetBit(i);
+      if (this.consideringFlow) this.unvisitedFlowCells!.unsetBit(i);
     };
+
+    const hasPriority = unvisitedDenseCount > 0 || unvisitedFlowCount > 0;
 
     if (this.heuristic == "SCANLINE") {
       for (let i = 0; i < this.waveSize; ++i) {
         // check if overlapping block can be placed
         if (this.overlapping && !this.toroidal) {
           if (this.wave[i].pos.x + ksize > this.width || this.wave[i].pos.y + ksize > this.height) {
-            visitDense(i);
+            visitMapped(i);
             continue;
           }
         }
 
-        if (unvisitedDenseCount > 0 && !this.unvisitedDenseCells!.getBit(i)) continue;
-        visitDense(i);
+        if (hasPriority) {
+          const isDense = unvisitedDenseCount > 0 && this.unvisitedDenseCells!.getBit(i);
+          const isFlow = unvisitedFlowCount > 0 && this.unvisitedFlowCells!.getBit(i);
+          
+          if (!isDense && !isFlow) continue;
+        }
 
+        visitMapped(i);
         if (!this.wave[i].isCollapsed) return i;
       }
     }
@@ -136,12 +158,17 @@ export class Wave {
         // check if overlapping block can be placed
         if (this.overlapping && !this.toroidal) {
           if (this.wave[i].pos.x + ksize > this.width || this.wave[i].pos.y + ksize > this.height) {
-            visitDense(i);
+            visitMapped(i);
             continue;
           }
         }
 
-        if (unvisitedDenseCount > 0 && !this.unvisitedDenseCells!.getBit(i)) continue;
+        if (hasPriority) {
+          const isDense = unvisitedDenseCount > 0 && this.unvisitedDenseCells!.getBit(i);
+          const isFlow = unvisitedFlowCount > 0 && this.unvisitedFlowCells!.getBit(i);
+          
+          if (!isDense && !isFlow) continue;
+        }
 
         if (!this.wave[i].isCollapsed) {
           const noise = Math.random() * 1e-6;
@@ -151,10 +178,10 @@ export class Wave {
             minEntropy = entropy;
             minIdx = i;
           }
-        } else visitDense(i);
+        } else visitMapped(i);
       }
 
-      visitDense(minIdx);
+      visitMapped(minIdx);
       return minIdx;
     }
 
@@ -175,7 +202,12 @@ export class Wave {
       }
     }
 
-    const chosenTile = cell.chooseRandomTile(densities, this.denseTilesPerMap, true);
+    let flow: Vec2 | undefined = undefined;
+    if (this.consideringFlow && this.flowMap) {
+      flow = this.flowMap[cell.pos.y][cell.pos.x];
+    }
+
+    const chosenTile = cell.chooseRandomTile(densities, this.denseTilesPerMap, true, flow);
 
     if (chosenTile == -1) return false;
 
@@ -237,9 +269,24 @@ export class Wave {
     let i = 0;
     for (let y = 0; y < this.height; ++y) {
       for (let x = 0; x < this.width; ++x) {
+        // reset cells
         this.wave[i++] = new Cell(
           { x, y }, this.tileset, this.totalWeightSum, this.totalWeightLogWeightsSum,
         );
+
+        // reset unvisited flow cells
+        if (this.consideringFlow && (this.flowMap![y][x].x !== 0 || this.flowMap![y][x].y !== 0)) {
+          this.unvisitedFlowCells!.setBit(idx(y, x, this.width));
+        }
+
+        // reset unvisited density cells
+        if (this.consideringDensity) {
+          for (let i = 0; i < this.densityMaps!.length; ++i) {
+            if (this.densityMaps![i][y][x] != 0) {
+              this.unvisitedDenseCells!.setBit(idx(y, x, this.width));
+            }
+          }
+        }
       }
     }
 
@@ -248,18 +295,6 @@ export class Wave {
       for (let tile = 0; tile < this.tileset.size; ++tile) {
         for (let dir = 0; dir < 4; ++dir) {
           this.supporters[cell][tile][dir] = this.tileset.allowedNeighbors[dir][tile].count();
-        }
-      }
-    }
-
-    if (this.consideringDensity) {
-      for (let i = 0; i < this.densityMaps!.length; ++i) {
-        for (let y = 0; y < this.height; ++y) {
-         for (let x = 0; x < this.width; ++x) {
-           if (this.densityMaps![i][y][x] != 0) {
-             this.unvisitedDenseCells!.setBit(idx(y, x, this.width));
-           }
-         }
         }
       }
     }

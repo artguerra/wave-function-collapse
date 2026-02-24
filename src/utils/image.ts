@@ -1,5 +1,5 @@
 import { assert } from "@/utils";
-import { idx } from "@/utils/grid";
+import { DX, DY, idx } from "@/utils/grid";
 import { PixelBlock } from "@/core/pixels";
 import type { PixelData, RGBA, Vec2 } from "@/core/types";
 
@@ -119,6 +119,7 @@ export function previewBlocks(
   selectedIndices?: Set<number>,
   selectedIndicesColor?: RGBA,
   singleIndexSelected?: number,
+  dirStrengths?: [number, number, number, number][],
 ) {
   if (blocks.length === 0) return;
 
@@ -166,6 +167,7 @@ export function previewBlocks(
       tileDrawSize,
     );
 
+    // visualize density maps tiles colors
     if (selectedIndices && selectedIndices.has(i)) {
       const col = selectedIndicesColor!;
       const rgb2hex = (v: number) => Math.round(v).toString(16);
@@ -179,12 +181,54 @@ export function previewBlocks(
       ctx.fillRect(dx, dy, tileDrawSize, tileDrawSize);
     }
 
+    // visualize floor tile on flow selection
     if (singleIndexSelected !== undefined && singleIndexSelected === i) {
       ctx.strokeStyle = "#FF6347";
       ctx.lineWidth = 3;
       ctx.strokeRect(dx + 1.5, dy + 1.5, tileDrawSize - 3, tileDrawSize - 3);
       ctx.fillStyle = `${ctx.strokeStyle}40`;
       ctx.fillRect(dx, dy, tileDrawSize, tileDrawSize);
+    }
+
+    if (dirStrengths && dirStrengths[i]) {
+      const strengths = dirStrengths[i];
+      const cx = dx + tileDrawSize / 2;
+      const cy = dy + tileDrawSize / 2;
+      const maxLen = tileDrawSize * 0.4;
+
+      ctx.strokeStyle = "#FF0101";
+      ctx.fillStyle = "#FF0101";
+      ctx.lineWidth = 2;
+
+      for (let d = 0; d < 4; ++d) {
+        const s = strengths[d];
+        if (s < 0.05) continue;
+
+        const len = maxLen * s;
+        const ex = cx + DX[d] * len;
+        const ey = cy + DY[d] * len;
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+
+        const headlen = 3 + 4 * s;
+        const angle = Math.atan2(DY[d], DX[d]);
+        
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(
+          ex - headlen * Math.cos(angle - Math.PI / 6),
+          ey - headlen * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          ex - headlen * Math.cos(angle + Math.PI / 6),
+          ey - headlen * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fill();
+      }
     }
   }
 }

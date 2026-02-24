@@ -43,11 +43,20 @@ export class Cell {
   }
 
   // choose at random one of the remaining states, considering tileset frequencies
-  chooseRandomTile(densities?: number[], denseTilesPerMap?: Bitset[], strict?: boolean): number {
+  chooseRandomTile(
+    densities?: number[],
+    denseTilesPerMap?: Bitset[],
+    strict?: boolean,
+    flow?: Vec2
+  ): number {
     const usingDensity = densities !== undefined && denseTilesPerMap;
+    const usingFlow = flow !== undefined && (flow.x !== 0 || flow.y !== 0);
+
     const currentFrequencies: number[] = [];
     const freqIsDense = new Bitset(this.possibleStates.size);
-    let sumFrequencies = 0, sumDenseFreqs = 0;
+    const freqIsFlow = new Bitset(this.possibleStates.size);
+
+    let sumFrequencies = 0, sumDenseFreqs = 0, sumFlowFreqs = 0;
 
     for (const [idx, possible] of this.possibleStates.bits()) {
       if (!possible) {
@@ -78,21 +87,65 @@ export class Cell {
         }
       }
 
+      if (usingFlow) {
+        const strengths = this.tileset.tiles[idx].dirStrength;
+        if (strengths) {
+          const sx = flow.x < 0 ? strengths[0] : strengths[2];
+          const sy = flow.y < 0 ? strengths[1] : strengths[3];
+
+          const score = Math.abs(flow.x) * sx + Math.abs(flow.y) * sy;
+
+          const EPS = 1e-4;
+          if (score > EPS) {
+            // bias: exp(beta * score)
+            const BETA = 2.0;
+            freq *= Math.exp(BETA * score);
+
+            sumFlowFreqs += freq;
+            freqIsFlow.setBit(idx);
+          }
+        }
+      }
+
       currentFrequencies.push(freq);
       sumFrequencies += freq;
     }
 
     if (sumFrequencies === 0) return -1; // no tiles allowed remaining
-    if (sumDenseFreqs === 0) strict = false; // allow all options if no density constraints
 
-    const threshold = Math.random() * (usingDensity && strict ? sumDenseFreqs : sumFrequencies);
+    // if strict is true, we only allow tiles that meet the painted criteria
+    let enforceDensity = usingDensity && strict && sumDenseFreqs > 0;
+    let enforceFlow = usingFlow && strict && sumFlowFreqs > 0;
+    let validSum = 0;
+
+    for (let i = 0; i < currentFrequencies.length; ++i) {
+      if (currentFrequencies[i] === 0) continue;
+      
+      const passDensity = !enforceDensity || freqIsDense.getBit(i);
+      const passFlow = !enforceFlow || freqIsFlow.getBit(i);
+
+      if (passDensity && passFlow) validSum += currentFrequencies[i];
+    }
+
+    if (validSum === 0) {
+       enforceDensity = false;
+       enforceFlow = false;
+       validSum = sumFrequencies;
+    }
+
+    const threshold = Math.random() * validSum;
 
     let currentSum = 0;
     for (let i = 0; i < currentFrequencies.length; ++i) {
-      if (!usingDensity || !strict || freqIsDense.getBit(i))
-        currentSum += currentFrequencies[i];
+      if (currentFrequencies[i] === 0) continue;
 
-      if (currentSum >= threshold) return i;
+      const passDensity = !enforceDensity || freqIsDense.getBit(i);
+      const passFlow = !enforceFlow || freqIsFlow.getBit(i);
+
+      if (passDensity && passFlow) {
+        currentSum += currentFrequencies[i];
+        if (currentSum >= threshold) return i;
+      }
     }
 
     return -1;
