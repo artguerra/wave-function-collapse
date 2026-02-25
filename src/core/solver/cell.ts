@@ -65,10 +65,9 @@ export class Cell {
       }
 
       let freq = this.tileset.frequencies[idx];
+      const STRENGTH = 100; 
 
       if (usingDensity) {
-        const STRENGTH = 100; 
-
         let isDenseInAny = false;
         for (let i = 0; i < densities.length; ++i) {
           const density = densities[i];
@@ -97,9 +96,7 @@ export class Cell {
 
           const EPS = 1e-4;
           if (score > EPS) {
-            // bias: exp(beta * score)
-            const BETA = 2.0;
-            freq *= Math.exp(BETA * score);
+            freq += score * STRENGTH;
 
             sumFlowFreqs += freq;
             freqIsFlow.setBit(idx);

@@ -62,6 +62,7 @@ function computeTilesDirections(
   allowedNeighbors: [Bitset[], Bitset[], Bitset[], Bitset[]],
   floorTileIdx: number
 ) {
+  let maxDir = 0.0;
   for (let i = 0; i < tiles.length; ++i) {
     const strengths: [number, number, number, number] = [0, 0, 0, 0];
     let neighCount = 0;
@@ -81,6 +82,15 @@ function computeTilesDirections(
       strengths[2] /= neighCount; strengths[3] /= neighCount;
     }
 
+    maxDir = Math.max(maxDir, ...strengths);
+
     tiles[i].dirStrength = strengths;
   }
+
+  for (let i = 0; i < tiles.length; ++i) {
+    for (let d = 0; d < 4; ++d) {
+      tiles[i].dirStrength![d] /= maxDir;
+    }
+  }
+
 }
