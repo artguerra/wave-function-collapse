@@ -8,9 +8,11 @@ export class Cell {
   
   possibleStates: Bitset; // each current valid state for this cell
   remainingStates: number; // the amount of valid states for this cell
+  remainingVariations: number; // the sum of variations of valid states
 
   isCollapsed: boolean;
   collapsedState: number | undefined; // final state (if collapsed)
+  collapsedVariation: number | undefined; // final tile variation (if collapsed)
 
   mainColorSum: RGBA; // for the overlapping model visualisation
   averageColorSum: RGBA; // for the simple tiled model visualisation
@@ -27,6 +29,7 @@ export class Cell {
     this.tileset = tileset;
     this.possibleStates = new Bitset(tileset.size, true);
     this.remainingStates = tileset.size;
+    this.remainingVariations = tileset.totalVariations;
 
     this.mainColorSum = [...tileset.mainColorSum];
     this.averageColorSum = [...tileset.averageColorSum];
@@ -153,25 +156,33 @@ export class Cell {
     this.collapsedState = tileIdx;
     this.entropy = 0;
 
-    this.currentMainColor = this.tileset.tiles[tileIdx].pixels.mainColor;
-    this.currentAverageColor = this.tileset.tiles[tileIdx].pixels.averageColor;
+    const tile = this.tileset.tiles[tileIdx];
+
+    const v = Math.floor(Math.random() * tile.variations.length);
+    this.currentMainColor = tile.variations[v].mainColor;
+    this.currentAverageColor = tile.variations[v].averageColor;
+    this.collapsedVariation = v;
   }
 
   // disallow tile in this cell (updates states)
   ban(tileIdx: number): boolean {
     if (!this.possibleStates.getBit(tileIdx)) return false;
 
+    const tile = this.tileset.tiles[tileIdx];
     this.possibleStates.unsetBit(tileIdx);
     this.remainingStates -= 1;
+    this.remainingVariations -= tile.variations.length;
 
     const freq = this.tileset.frequencies[tileIdx];
     this.sumWeights -= freq;
     this.sumWeightLogWeights -= Math.log(freq) * freq;
     this.entropy = Math.log(this.sumWeights) - this.sumWeightLogWeights / this.sumWeights;
 
-    for (let i = 0; i < 4; ++i) {
-      this.mainColorSum[i] -= this.tileset.tiles[tileIdx].pixels.mainColor[i];
-      this.averageColorSum[i] -= this.tileset.tiles[tileIdx].pixels.averageColor[i];
+    for (let v = 0; v < tile.variations.length; ++v) {
+      for (let i = 0; i < 4; ++i) {
+        this.mainColorSum[i] -= tile.variations[v].mainColor[i];
+        this.averageColorSum[i] -= tile.variations[v].averageColor[i];
+      }
     }
 
     this.updateAverageColor();
@@ -182,17 +193,17 @@ export class Cell {
   updateAverageColor(): void {
     if (this.remainingStates > 0) {
       this.currentMainColor = [
-        this.mainColorSum[0] / this.remainingStates,
-        this.mainColorSum[1] / this.remainingStates,
-        this.mainColorSum[2] / this.remainingStates,
-        this.mainColorSum[3] / this.remainingStates,
+        this.mainColorSum[0] / this.remainingVariations,
+        this.mainColorSum[1] / this.remainingVariations,
+        this.mainColorSum[2] / this.remainingVariations,
+        this.mainColorSum[3] / this.remainingVariations,
       ];
 
       this.currentAverageColor = [
-        this.averageColorSum[0] / this.remainingStates,
-        this.averageColorSum[1] / this.remainingStates,
-        this.averageColorSum[2] / this.remainingStates,
-        this.averageColorSum[3] / this.remainingStates,
+        this.averageColorSum[0] / this.remainingVariations,
+        this.averageColorSum[1] / this.remainingVariations,
+        this.averageColorSum[2] / this.remainingVariations,
+        this.averageColorSum[3] / this.remainingVariations,
       ];
     } else {
         this.currentMainColor = [0, 0, 0, 255]; // contradiction: black

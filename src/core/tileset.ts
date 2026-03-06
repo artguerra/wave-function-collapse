@@ -18,6 +18,7 @@ export class Tileset {
 
   readonly mainColorSum: RGBA; // for progressive color updates (overlapping)
   readonly averageColorSum: RGBA; // for simple tiled model
+  readonly totalVariations: number;
 
   constructor(
     tileSize: number,
@@ -31,22 +32,34 @@ export class Tileset {
     this.size = tiles.length;
     this.allowedNeighbors = allowed;
     this.frequencies = new Float32Array(weights);
+    this.totalVariations = 0;
 
     // calculate average color
     const avgColorSum = [0, 0, 0, 0];
+    const denom = [0, 0, 0, 0];
     for (const tile of tiles) {
-      for (let i = 0; i < 4; ++i) avgColorSum[i] += tile.pixels.averageColor[i];
+      const vars = tile.variations.length;
+      this.totalVariations += vars;
+
+      for (let v = 0; v < vars; ++v) {
+        for (let i = 0; i < 4; ++i) {
+          avgColorSum[i] += tile.variations[v].averageColor[i];
+          denom[i]++;
+        }
+      }
     }
-    this.averageColor = avgColorSum.map(s => s / tiles.length) as RGBA;
+    this.averageColor = avgColorSum.map((s, i) => s / denom[i]) as RGBA;
 
     // calculate total sum of tiles main colors
     this.mainColorSum = [0, 0, 0, 0];
     this.averageColorSum = [0, 0, 0, 0];
     for(const tile of tiles) {
-      for(let i = 0; i < 4; ++i) {
-        this.mainColorSum[i] += tile.pixels.mainColor[i];
-        this.averageColorSum[i] += tile.pixels.averageColor[i];
-      }
+      for (let v = 0; v < tile.variations.length; ++v) {
+        for(let i = 0; i < 4; ++i) {
+          this.mainColorSum[i] += tile.variations[v].mainColor[i];
+          this.averageColorSum[i] += tile.variations[v].averageColor[i];
+        }
+     }
     }
   }
 

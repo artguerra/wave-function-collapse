@@ -329,7 +329,7 @@ export class Wave {
         // if collapsed, draw the actual detailed tile pixels
         // if not collapsed, draw the average color of remaining options
         const pixels = cell.isCollapsed 
-           ? this.tileset.tiles[cell.collapsedState!].pixels.values
+           ? this.tileset.tiles[cell.collapsedState!].variations[cell.collapsedVariation!].values
            : null; 
         
         const fallbackColor = cell.currentAverageColor;

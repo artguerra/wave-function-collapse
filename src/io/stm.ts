@@ -12,6 +12,7 @@ const REFLECT_IDX: Record<string, (idx: number) => number> = {
   T: (idx) => (idx % 2 === 0) ? idx : (4 - idx),
   I: (idx) => idx,
   "\\": (idx) => 1 - idx,
+  C: (idx) => idx,
 }
 
 const ROTATION_MAP: Record<string, (r: number) => number> = {
@@ -20,18 +21,20 @@ const ROTATION_MAP: Record<string, (r: number) => number> = {
   T: (r) => r % 4,
   I: (r) => r % 2,
   "\\": (r) => r % 2,
+  C: (_) => 0,
 }
 
 const CARDINALITY: Record<string, number> = {
-  X: 1, L: 4, T: 4, I: 2, "\\": 2
+  X: 1, L: 4, T: 4, I: 2, "\\": 2, C: 1
 };
 
 export async function createStmTileset(
   xml: string, tilesDir: string,
   generateSymmetries: boolean = true,
+  customTileset: boolean = false,
   inferNeighborhood: boolean = false,
   inferredNeighborhoodWidth: number = 1,
-  inferrenceTolerance: number = 40
+  inferrenceTolerance: number = 40,
 ): Promise<{ tileset: Tileset, tileSize: number }> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, "text/xml");
@@ -49,26 +52,37 @@ export async function createStmTileset(
   // read and create tiles (w/ symmetry)
   for (const tag of tileTags) {
     const name = tag.getAttribute("name")!;
-    const sym = (tag.getAttribute("symmetry") || "X").toUpperCase();
+    const sym = (tag.getAttribute("symmetry") || "C").toUpperCase();
     const weight = parseFloat(tag.getAttribute("weight") || "1.0");
 
     const cardinality = CARDINALITY[sym] || 1;
     tileNameMap.set(name, { firstIdx: tiles.length, sym });
     
-    if (generateSymmetries) {
-      const png = await decodePNG(`${tilesDir}/${name}.png`);
-      if (tileSize == -1) tileSize = png.width;
-      else assert(tileSize == png.width, "All the tiles should have the same size.");
-      
-      const pixels = pngToPixelBlock(png);
+    if (generateSymmetries || customTileset) {
+      const vars = customTileset ? parseInt(tag.getAttribute("variations")!) : 1;
+      const rotatedVariations: any[][] = Array.from({ length: cardinality }, () => []);
 
-      // add symmetries
-      let rotated = pixels;
+      for (let v = 0; v < vars; ++v) {
+        let png;
+        if (!customTileset) png = await decodePNG(`${tilesDir}/${name}.png`);
+        else png = await decodePNG(`${tilesDir}/${name}_var_${v}.png`);
+
+        if (tileSize == -1) tileSize = png.width;
+        else assert(tileSize == png.width, "All the tiles should have the same size.");
+
+        const pixels = pngToPixelBlock(png);
+
+        // add symmetries
+        let rotated = pixels;
+        for (let i = 0; i < cardinality; ++i) {
+          rotatedVariations[i].push(rotated);
+          rotated = rotateBlock90(rotated);
+        }
+      }
+
       for (let i = 0; i < cardinality; ++i) {
-        tiles.push({ id: tiles.length, pixels: rotated });
+        tiles.push({ id: tiles.length, variations: rotatedVariations[i] });
         frequencies.push(weight);
-
-        rotated = rotateBlock90(rotated);
       }
     } else {
       for (let i = 0; i < cardinality; ++i) {
@@ -78,7 +92,7 @@ export async function createStmTileset(
         else assert(tileSize == png.width, "All the tiles should have the same size.");
 
 
-        tiles.push({ id: tiles.length, pixels: pngToPixelBlock(png) });
+        tiles.push({ id: tiles.length, variations: [pngToPixelBlock(png)] });
         frequencies.push(weight);
       }
     }
@@ -120,48 +134,105 @@ export async function createStmTileset(
       return tileInfo.firstIdx + rotationOffset;
     }
 
+    const shouldRotateRule = (t1: string, t2: string) => {
+      const t1Name = t1.split(/\s+/)[0];
+      const t2Name = t2.split(/\s+/)[0];
+      const sym1 = tileNameMap.get(t1Name)!.sym;
+      const sym2 = tileNameMap.get(t2Name)!.sym;
+      return sym1 !== "C" && sym2 !== "C";
+    };
+
     const neighbors = doc.querySelectorAll("neighbors neighbor");
     for (const neigh of neighbors) {
-      const leftstr = neigh.getAttribute("left")!;
-      const rightstr = neigh.getAttribute("right")!;
+      const leftstr = neigh.getAttribute("left");
+      const rightstr = neigh.getAttribute("right");
+      const topstr = neigh.getAttribute("top");
+      const bottomstr = neigh.getAttribute("bottom");
 
-      for (let refl = 0; refl < 2; ++refl) {
-        const reflected = refl == 1;
+      if (leftstr && rightstr) {
+        const rotateRule = shouldRotateRule(leftstr, rightstr);
+        const maxRot = rotateRule ? 4 : 1;
+        const maxRefl = rotateRule ? 2 : 1;
 
-        for (let rot = 0; rot < 4; ++rot) {
-          const leftTile = getTileIdx(leftstr, rot, reflected);
-          const rightTile = getTileIdx(rightstr, rot, reflected);
-          const R = reflected ? leftTile : rightTile;
-          const L = reflected ? rightTile : leftTile;
+        for (let refl = 0; refl < maxRefl; ++refl) {
+          const reflected = refl == 1;
 
-          // normal (no rotation)
-          if (rot == 0) {
-            allowed[0][R].setBit(L);
-            allowed[2][L].setBit(R);
+          for (let rot = 0; rot < maxRot; ++rot) {
+            const leftTile = getTileIdx(leftstr, rot, reflected);
+            const rightTile = getTileIdx(rightstr, rot, reflected);
+            const R = reflected ? leftTile : rightTile;
+            const L = reflected ? rightTile : leftTile;
+
+            // normal (no rotation)
+            if (rot == 0) {
+              allowed[0][R].setBit(L);
+              allowed[2][L].setBit(R);
+            }
+
+            // rotated 90deg
+            if (rot == 1) {
+              allowed[3][R].setBit(L);
+              allowed[1][L].setBit(R);
+            }
+
+            // rotated 180deg
+            if (rot == 2) {
+              allowed[2][R].setBit(L);
+              allowed[0][L].setBit(R);
+            }
+
+            // rotated 270deg
+            if (rot == 3) {
+              allowed[1][R].setBit(L);
+              allowed[3][L].setBit(R);
+            }
           }
+        }
+      }
 
-          // rotated 90deg
-          if (rot == 1) {
-            allowed[3][R].setBit(L);
-            allowed[1][L].setBit(R);
-          }
+      if (topstr && bottomstr) {
+        const rotateRule = shouldRotateRule(topstr, bottomstr);
+        const maxRot = rotateRule ? 4 : 1;
+        const maxRefl = rotateRule ? 2 : 1;
 
-          // rotated 180deg
-          if (rot == 2) {
-            allowed[2][R].setBit(L);
-            allowed[0][L].setBit(R);
-          }
+        for (let refl = 0; refl < maxRefl; ++refl) {
+          const reflected = refl == 1;
+          for (let rot = 0; rot < maxRot; ++rot) {
+            const topTile = getTileIdx(topstr, rot, reflected);
+            const bottomTile = getTileIdx(bottomstr, rot, reflected);
+            
+            // mirroring horizontally does not swap top and bottom
+            const T = topTile;
+            const B = bottomTile;
 
-          // rotated 270deg
-          if (rot == 3) {
-            allowed[1][R].setBit(L);
-            allowed[3][L].setBit(R);
+            if (rot == 0) {
+              allowed[1][B].setBit(T);
+              allowed[3][T].setBit(B);
+            }
+
+            // rotated 90deg
+            if (rot == 1) {
+              allowed[2][B].setBit(T);
+              allowed[0][T].setBit(B);
+            }
+
+            // rotated 180deg
+            if (rot == 2) {
+              allowed[3][B].setBit(T);
+              allowed[1][T].setBit(B);
+            }
+
+            // rotated 270deg
+            if (rot == 3) {
+              allowed[0][B].setBit(T);
+              allowed[2][T].setBit(B);
+            }
           }
         }
       }
     }
   }
-
+  
   let totalFrequency = 0;
   for (let i = 0; i < frequencies.length; ++i) {
     totalFrequency += frequencies[i];
@@ -173,7 +244,8 @@ export async function createStmTileset(
 }
 
 function compatible(tile: Tile, neighbor: Tile, dir: number, pixelWidth: number, tolerance: number): boolean {
-  const ksize = tile.pixels.ksize;
+  const pixels = tile.variations[0];
+  const ksize = pixels.ksize;
   const verifyMargin = ksize - pixelWidth;
 
   let meanDist = 0;
@@ -204,7 +276,7 @@ function compatible(tile: Tile, neighbor: Tile, dir: number, pixelWidth: number,
       const tileIdx = idx(y, x, ksize);
       const neighIdx = idx(y + shiftY, x + shiftX, ksize);
 
-      meanDist += rgbaDist(tile.pixels.values[tileIdx], neighbor.pixels.values[neighIdx]);
+      meanDist += rgbaDist(pixels.values[tileIdx], neighbor.variations[0].values[neighIdx]);
     }
   }
   meanDist /= ksize * pixelWidth;

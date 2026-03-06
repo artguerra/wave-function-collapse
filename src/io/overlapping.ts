@@ -79,7 +79,7 @@ function createTileset(
 
     if (!tileIndexMap.has(hash)) {
       const id = tiles.length;
-      tiles.push({ id, pixels: rawTiles[i] });
+      tiles.push({ id, variations: [rawTiles[i]] });
 
       frequencies.push(1);
       tileIndexMap.set(hash, id);
@@ -128,7 +128,7 @@ function createTileset(
 }
 
 function compatible(tile: Tile, neighbor: Tile, dir: number): boolean {
-  const ksize = tile.pixels.ksize;
+  const ksize = tile.variations[0].ksize;
 
   let startX = 0, endX = ksize, startY = 0, endY = ksize;
   let shiftX = 0, shiftY = 0;
@@ -157,7 +157,7 @@ function compatible(tile: Tile, neighbor: Tile, dir: number): boolean {
       const tileIdx = idx(y, x, ksize);
       const neighIdx = idx(y + shiftY, x + shiftX, ksize);
 
-      if (!rgbaEqual(tile.pixels.values[tileIdx], neighbor.pixels.values[neighIdx])) return false;
+      if (!rgbaEqual(tile.variations[0].values[tileIdx], neighbor.variations[0].values[neighIdx])) return false;
     }
   }
 

@@ -20,6 +20,7 @@ import imgPlatformer from "@assets/platformer.png";
 import tilesetCastle from "@assets/tilesets/castle/castle.xml?raw";
 import tilesetCircuit from "@assets/tilesets/circuit/circuit.xml?raw";
 import tilesetSummer from "@assets/tilesets/summer/summer.xml?raw";
+import tilesetCustom from "@assets/tilesets/wfc_tileset/tileset.xml?raw";
 
 const BASE_TILESET_PATH = "assets/tilesets";
 
@@ -36,6 +37,7 @@ const TILESETS_STM: Record<string, { definition: string, dirPath: string, genSym
   "Castle": { definition: tilesetCastle, dirPath: `${BASE_TILESET_PATH}/castle`, genSym: true },
   "Circuit": { definition: tilesetCircuit, dirPath: `${BASE_TILESET_PATH}/circuit`, genSym: true },
   "Summer": { definition: tilesetSummer, dirPath: `${BASE_TILESET_PATH}/summer`, genSym: false },
+  "Custom": { definition: tilesetCustom, dirPath: `${BASE_TILESET_PATH}/wfc_tileset`, genSym: true },
 }
 
 // configuration
@@ -442,7 +444,7 @@ function updateTilesPreview(): void {
 
   previewBlocks(
     ui.tilesPreviewCanvas,
-    wfc.tileset.tiles.map(t => t.pixels),
+    wfc.tileset.tiles.map(t => t.variations[0]),
     tilePreviewSize,
     tilePreviewScale,
     tilePreviewGap,
@@ -502,7 +504,7 @@ async function loadTileset() {
       wfc.tileset = await createOverlappingTileset(IMAGES_OVERLAPPING[imgKey], tileSize, symmetry);
     } else {
       const stm = TILESETS_STM[imgKey];
-      const res = await createStmTileset(stm.definition, stm.dirPath, stm.genSym);
+      const res = await createStmTileset(stm.definition, stm.dirPath, stm.genSym, imgKey === "Custom");
 
       wfc.tileset = res.tileset;
     }

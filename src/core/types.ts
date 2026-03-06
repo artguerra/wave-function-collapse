@@ -14,7 +14,7 @@ export interface PixelData {
 export interface Tile {
   id: number;
   dirStrength?: [number, number, number, number];
-  pixels: PixelData;
+  variations: PixelData[];
 }
 
 export type SymmetryMode = "ALL" | "MIRROR_X" | "MIRROR_Y" | "MIRROR_XY" | "NONE";
