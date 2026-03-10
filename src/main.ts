@@ -1,5 +1,6 @@
 import { createOverlappingTileset } from "@/io/overlapping";
 import { createStmTileset } from "@/io/stm";
+import { exportWaveToDataURL } from "@/io/output";
 import { randomSRGBAColor } from "@/utils";
 import { idx } from "@/utils/grid";
 import { previewBlocks, previewMaps, renderFlowArrows } from "@/utils/image";
@@ -62,6 +63,7 @@ const ui = {
   speedRange: document.querySelector("#speed-range") as HTMLInputElement,
   speedVal: document.querySelector("#speed-val") as HTMLSpanElement,
   restartBtn: document.querySelector("#restart-btn") as HTMLButtonElement,
+  exportAnchor: document.querySelector("#export") as HTMLAnchorElement,
   status: document.querySelector("#status") as HTMLElement,
   canvas: document.querySelector("#main-canvas") as HTMLCanvasElement,
 
@@ -175,6 +177,14 @@ function initUI() {
 
     setPreviewDisplay();
     runSimulation();
+  });
+
+  // export generation
+  ui.exportAnchor.addEventListener("click", () => {
+    if (wfc.wave) {
+      const data = exportWaveToDataURL(wfc.wave);
+      ui.exportAnchor.href = data;
+    }
   });
 
   // density edit

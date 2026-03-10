@@ -300,7 +300,7 @@ export class Wave {
     }
   }
 
-  getTexturePixels(): Uint8ClampedArray {
+  getTexturePixels(): Uint8ClampedArray<ArrayBuffer> {
     const ksize = this.tileset.tileSize;
     
     const scale = this.overlapping ? 1 : ksize;
