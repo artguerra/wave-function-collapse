@@ -33,7 +33,7 @@ export async function createStmTileset(
   generateSymmetries: boolean = true,
   customTileset: boolean = false,
   inferNeighborhood: boolean = false,
-  inferredNeighborhoodWidth: number = 1,
+  inferredNeighborhoodWidth: number = 0,
   inferrenceTolerance: number = 40,
 ): Promise<{ tileset: Tileset, tileSize: number }> {
   const parser = new DOMParser();
@@ -56,6 +56,7 @@ export async function createStmTileset(
     const weight = parseFloat(tag.getAttribute("weight") || "1.0");
 
     const cardinality = CARDINALITY[sym] || 1;
+
     tileNameMap.set(name, { firstIdx: tiles.length, sym });
     
     if (generateSymmetries || customTileset) {
@@ -64,6 +65,7 @@ export async function createStmTileset(
 
       for (let v = 0; v < vars; ++v) {
         let png;
+        console.log(name)
         if (!customTileset) png = await decodePNG(`${tilesDir}/${name}.png`);
         else png = await decodePNG(`${tilesDir}/${name}_var_${v}.png`);
 
@@ -74,15 +76,26 @@ export async function createStmTileset(
 
         // add symmetries
         let rotated = pixels;
-        for (let i = 0; i < cardinality; ++i) {
-          rotatedVariations[i].push(rotated);
-          rotated = rotateBlock90(rotated);
+
+        if (customTileset && inferNeighborhood) {
+          for (let i = 0; i < cardinality; ++i) {
+            tiles.push({ id: tiles.length, variations: [rotated] });
+            frequencies.push(weight);
+            rotated = rotateBlock90(rotated);
+          }
+        } else {
+          for (let i = 0; i < cardinality; ++i) {
+            rotatedVariations[i].push(rotated);
+            rotated = rotateBlock90(rotated);
+          }
         }
       }
 
-      for (let i = 0; i < cardinality; ++i) {
-        tiles.push({ id: tiles.length, variations: rotatedVariations[i] });
-        frequencies.push(weight);
+      if (!customTileset || !inferNeighborhood) {
+        for (let i = 0; i < cardinality; ++i) {
+          tiles.push({ id: tiles.length, variations: rotatedVariations[i] });
+          frequencies.push(weight);
+        }
       }
     } else {
       for (let i = 0; i < cardinality; ++i) {
@@ -108,12 +121,44 @@ export async function createStmTileset(
   ];
 
   if (inferNeighborhood) {
+    // 1/6 of the tile
+    const overlapWidth = inferredNeighborhoodWidth > 1 
+        ? inferredNeighborhoodWidth 
+        : Math.max(3, Math.floor(tileSize / 6)); 
+        
+    const toleranceFactor = 1.1; 
+    
+    const errorMatrix = new Map<string, number>();
     for (const tile of tiles) {
       for (const neighTile of tiles) {
         for (let d = 0; d < 4; ++d) {
-          if (allowed[d][tile.id].getBit(neighTile.id)) continue; // already computed
+          const key = `${tile.id}-${neighTile.id}-${d}`;
+          if (errorMatrix.has(key)) continue;
+          
+          const err = getOverlapError(tile, neighTile, d, overlapWidth);
+          errorMatrix.set(key, err);
+          errorMatrix.set(`${neighTile.id}-${tile.id}-${OPPOSITE[d]}`, err);
+        }
+      }
+    }
 
-          if (compatible(tile, neighTile, d, inferredNeighborhoodWidth, inferrenceTolerance)) {
+    // find the best match for each tile/direction, and accept anything within 10% of it
+    for (const tile of tiles) {
+      for (let d = 0; d < 4; ++d) {
+        let minError = Infinity;
+        
+        for (const neighTile of tiles) {
+          const err = errorMatrix.get(`${tile.id}-${neighTile.id}-${d}`)!;
+          if (err < minError) minError = err;
+        }
+
+        const allowedErrorLimit = Math.max(minError * toleranceFactor, minError + 1);
+
+        for (const neighTile of tiles) {
+          const err = errorMatrix.get(`${tile.id}-${neighTile.id}-${d}`)!;
+          
+          // within 10% of the best match
+          if (err <= allowedErrorLimit && err < inferrenceTolerance) {
             allowed[d][tile.id].setBit(neighTile.id);
             allowed[OPPOSITE[d]][neighTile.id].setBit(tile.id);
           }
@@ -232,7 +277,7 @@ export async function createStmTileset(
       }
     }
   }
-  
+
   let totalFrequency = 0;
   for (let i = 0; i < frequencies.length; ++i) {
     totalFrequency += frequencies[i];
@@ -243,19 +288,19 @@ export async function createStmTileset(
   return { tileset: new Tileset(tileSize, tiles, normalizedFrequencies, allowed), tileSize };
 }
 
-function compatible(tile: Tile, neighbor: Tile, dir: number, pixelWidth: number, tolerance: number): boolean {
+function getOverlapError(tile: Tile, neighbor: Tile, dir: number, pixelWidth: number): number {
   const pixels = tile.variations[0];
   const ksize = pixels.ksize;
   const verifyMargin = ksize - pixelWidth;
 
-  let meanDist = 0;
+  let totalSSD = 0;
   let startX = 0, endX = ksize, startY = 0, endY = ksize;
   let shiftX = 0, shiftY = 0;
 
   switch (dir) {
     case 0: // W
       endX = ksize - verifyMargin;
-      shiftX = verifyMargin; 
+      shiftX = verifyMargin;
       break;
     case 2: // E
       startX = verifyMargin;
@@ -271,22 +316,76 @@ function compatible(tile: Tile, neighbor: Tile, dir: number, pixelWidth: number,
       break;
   }
 
+  let pixelCount = 0;
   for (let y = startY; y < endY; y++) {
     for (let x = startX; x < endX; x++) {
       const tileIdx = idx(y, x, ksize);
       const neighIdx = idx(y + shiftY, x + shiftX, ksize);
 
-      meanDist += rgbaDist(pixels.values[tileIdx], neighbor.variations[0].values[neighIdx]);
+      console.log(pixels.values[tileIdx], neighbor)
+      totalSSD += rgbaLabSSD(pixels.values[tileIdx], neighbor.variations[0].values[neighIdx]);
+      pixelCount++;
     }
   }
-  meanDist /= ksize * pixelWidth;
-
-  return meanDist <= tolerance;
+  
+  // mean squared error for the overlap patch
+  return totalSSD / pixelCount;
 }
 
-function rgbaDist(a: RGBA, b: RGBA): number {
-  const vec = [a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]];
-  const dist = Math.sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2] + vec[3] * vec[3]);
+// cache to store colors already converted
+const labCache = new Map<number, [number, number, number]>();
 
-  return dist;
+function rgbToLabCached(r: number, g: number, b: number): [number, number, number] {
+  const key = (r << 16) | (g << 8) | b;
+  
+  const cached = labCache.get(key);
+  if (cached !== undefined) return cached;
+
+  // sRGB to linear RGB, then to CIE XYZ
+  let rL = r / 255.0;
+  let gL = g / 255.0;
+  let bL = b / 255.0;
+
+  rL = rL > 0.04045 ? Math.pow((rL + 0.055) / 1.055, 2.4) : rL / 12.92;
+  gL = gL > 0.04045 ? Math.pow((gL + 0.055) / 1.055, 2.4) : gL / 12.92;
+  bL = bL > 0.04045 ? Math.pow((bL + 0.055) / 1.055, 2.4) : bL / 12.92;
+
+  const x = (rL * 0.4124564 + gL * 0.3575761 + bL * 0.1804375) * 100;
+  const y = (rL * 0.2126729 + gL * 0.7151522 + bL * 0.0721750) * 100;
+  const z = (rL * 0.0193339 + gL * 0.1191920 + bL * 0.9503041) * 100;
+
+  // CIE XYZ to CIELAB
+  const refX = 95.047;
+  const refY = 100.000;
+  const refZ = 108.883;
+
+  let xN = x / refX;
+  let yN = y / refY;
+  let zN = z / refZ;
+
+  xN = xN > 0.008856 ? Math.pow(xN, 1.0 / 3.0) : (7.787 * xN) + (16.0 / 116.0);
+  yN = yN > 0.008856 ? Math.pow(yN, 1.0 / 3.0) : (7.787 * yN) + (16.0 / 116.0);
+  zN = zN > 0.008856 ? Math.pow(zN, 1.0 / 3.0) : (7.787 * zN) + (16.0 / 116.0);
+
+  const L = (116.0 * yN) - 16.0;
+  const A = 500.0 * (xN - yN);
+  const B = 200.0 * (yN - zN);
+
+  const lab: [number, number, number] = [L, A, B];
+  
+  labCache.set(key, lab);
+  return lab;
+}
+
+function rgbaLabSSD(a: RGBA, b: RGBA): number {
+  const [l1, a1, b1] = rgbToLabCached(a[0], a[1], a[2]);
+  const [l2, a2, b2] = rgbToLabCached(b[0], b[1], b[2]);
+
+  const dl = l1 - l2;
+  const da = a1 - a2;
+  const db = b1 - b2;
+  
+  const dAlpha = (a[3] - b[3]) * (100.0 / 255.0);
+
+  return (dl * dl) + (da * da) + (db * db) + (dAlpha * dAlpha);
 }

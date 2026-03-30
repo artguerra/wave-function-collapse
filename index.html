@@ -9,7 +9,7 @@
         height: 100%;
         width: 100%;
         margin: 0;
-        font-family: "Segoe UI", sans-serif;
+        font-family: "Segoe UI", sans-serif !important;
         background-color: #1e1e1e;
         color: #e0e0e0;
         display: flex;
@@ -60,9 +60,11 @@
         color: #aaa;
       }
 
-      button {
+      button, #export {
+        font-family: "Segoe UI", sans-serif !important;
         background-color: #007acc;
         color: white;
+        text-align: center;
         border: none;
         padding: 15px;
         border-radius: 4px;
@@ -223,6 +225,7 @@
           <input type="range" id="speed-range" min="1" max="500" value="1">
           
           <button id="restart-btn">RESTART GENERATION</button>
+          <a id="export" download="image.png">EXPORT GENERATION</a>
         </div>
 
         <div>

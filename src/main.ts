@@ -514,7 +514,9 @@ async function loadTileset() {
       wfc.tileset = await createOverlappingTileset(IMAGES_OVERLAPPING[imgKey], tileSize, symmetry);
     } else {
       const stm = TILESETS_STM[imgKey];
-      const res = await createStmTileset(stm.definition, stm.dirPath, stm.genSym, imgKey === "Custom");
+
+      const isCustom = imgKey === "Custom";
+      const res = await createStmTileset(stm.definition, stm.dirPath, stm.genSym, isCustom);
 
       wfc.tileset = res.tileset;
     }

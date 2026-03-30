@@ -2,7 +2,7 @@ import type { Vec2 } from "@/core/types.ts";
 import { Tileset } from "@/core/tileset";
 import { Cell } from "@/core/solver/cell";
 import { idx, DX, DY, OPPOSITE } from "@/utils/grid.ts";
-import { Bitset } from "../bitset";
+import { Bitset } from "@/core/bitset";
 
 type Heuristic = "SCANLINE" | "ENTROPY";
 
