@@ -65,7 +65,6 @@ export async function createStmTileset(
 
       for (let v = 0; v < vars; ++v) {
         let png;
-        console.log(name)
         if (!customTileset) png = await decodePNG(`${tilesDir}/${name}.png`);
         else png = await decodePNG(`${tilesDir}/${name}_var_${v}.png`);
 

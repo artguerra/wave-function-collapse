@@ -174,6 +174,12 @@ export class Wave {
           const noise = Math.random() * 1e-6;
           const entropy = this.wave[i].entropy + noise;
 
+          if (this.wave[i].remainingStates === 0) {
+            // propagate fail to observe
+            visitMapped(i);
+            return i;
+          }
+
           if (entropy < minEntropy) {
             minEntropy = entropy;
             minIdx = i;
@@ -181,7 +187,10 @@ export class Wave {
         } else visitMapped(i);
       }
 
-      visitMapped(minIdx);
+      if (minIdx !== -1) {
+        visitMapped(minIdx);
+      }
+
       return minIdx;
     }
 
